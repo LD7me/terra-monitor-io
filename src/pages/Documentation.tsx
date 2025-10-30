@@ -20,11 +20,12 @@ const Documentation = () => {
           </div>
 
           <Tabs defaultValue="overview" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="hardware">Hardware Setup</TabsTrigger>
+              <TabsTrigger value="hardware">Hardware</TabsTrigger>
               <TabsTrigger value="software">Software</TabsTrigger>
-              <TabsTrigger value="api">API Reference</TabsTrigger>
+              <TabsTrigger value="setup">Setup Guide</TabsTrigger>
+              <TabsTrigger value="api">API</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -105,44 +106,80 @@ const Documentation = () => {
             <TabsContent value="hardware" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>GPIO Pin Connections</CardTitle>
-                  <CardDescription>Wiring diagram for all sensors and modules</CardDescription>
+                  <CardTitle>Complete Hardware Wiring</CardTitle>
+                  <CardDescription>Step-by-step connection guide for all components</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-4">
+                    <p className="text-sm font-medium text-amber-600 mb-2">⚠️ Important Safety Notes</p>
+                    <ul className="text-xs space-y-1 text-muted-foreground">
+                      <li>• Power off Raspberry Pi before making connections</li>
+                      <li>• Double-check pin connections before powering on</li>
+                      <li>• Never connect high voltage directly to GPIO pins</li>
+                      <li>• Use proper power supply (5V 2.5A+ for Pi 3)</li>
+                    </ul>
+                  </div>
+
                   <div className="space-y-4">
                     <div className="p-4 rounded-lg bg-primary/5 border-2 border-primary/20">
                       <div className="flex items-center gap-2 mb-3">
-                        <Badge>DHT22 Sensor</Badge>
+                        <Badge>DHT22 Temperature & Humidity Sensor</Badge>
                       </div>
-                      <div className="space-y-2 font-mono text-sm">
-                        <p><span className="text-primary">VCC</span> → 5V (Pin 2)</p>
-                        <p><span className="text-primary">GND</span> → Ground (Pin 6)</p>
-                        <p><span className="text-primary">DATA</span> → GPIO 4 (Pin 7)</p>
+                      <div className="space-y-2 font-mono text-sm mb-3">
+                        <p><span className="text-primary font-bold">Pin 1 (VCC)</span> → Raspberry Pi Pin 2 (5V Power)</p>
+                        <p><span className="text-primary font-bold">Pin 2 (DATA)</span> → Raspberry Pi Pin 7 (GPIO 4)</p>
+                        <p><span className="text-primary font-bold">Pin 4 (GND)</span> → Raspberry Pi Pin 6 (Ground)</p>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Note: DHT22 Pin 3 is not used. Some DHT22 modules have built-in pull-up resistors.
+                      </p>
                     </div>
 
                     <div className="p-4 rounded-lg bg-secondary/5 border-2 border-secondary/20">
                       <div className="flex items-center gap-2 mb-3">
                         <Badge>Soil Moisture Sensor</Badge>
                       </div>
-                      <div className="space-y-2 font-mono text-sm">
-                        <p><span className="text-secondary">VCC</span> → 5V (Pin 4)</p>
-                        <p><span className="text-secondary">GND</span> → Ground (Pin 9)</p>
-                        <p><span className="text-secondary">DATA</span> → GPIO 17 (Pin 11)</p>
+                      <div className="space-y-2 font-mono text-sm mb-3">
+                        <p><span className="text-secondary font-bold">VCC</span> → Raspberry Pi Pin 4 (5V Power)</p>
+                        <p><span className="text-secondary font-bold">DATA (D0)</span> → Raspberry Pi Pin 11 (GPIO 17)</p>
+                        <p><span className="text-secondary font-bold">GND</span> → Raspberry Pi Pin 9 (Ground)</p>
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Digital output: HIGH = Dry soil, LOW = Wet soil. Adjust sensitivity with onboard potentiometer.
+                      </p>
                     </div>
 
                     <div className="p-4 rounded-lg bg-accent/5 border-2 border-accent/20">
                       <div className="flex items-center gap-2 mb-3">
-                        <Badge>Relay Module</Badge>
+                        <Badge>5V Relay Module (for Irrigation)</Badge>
                       </div>
-                      <div className="space-y-2 font-mono text-sm">
-                        <p><span className="text-accent">VCC</span> → 5V (Pin 2)</p>
-                        <p><span className="text-accent">GND</span> → Ground (Pin 14)</p>
-                        <p><span className="text-accent">IN</span> → GPIO 18 (Pin 12)</p>
-                        <p className="text-muted-foreground text-xs mt-2">
-                          💡 Connect your irrigation pump or fan to the relay's COM and NO terminals
-                        </p>
+                      <div className="space-y-2 font-mono text-sm mb-3">
+                        <p><span className="text-accent font-bold">VCC</span> → Raspberry Pi Pin 1 (3.3V) or Pin 2 (5V)</p>
+                        <p><span className="text-accent font-bold">IN</span> → Raspberry Pi Pin 12 (GPIO 18)</p>
+                        <p><span className="text-accent font-bold">GND</span> → Raspberry Pi Pin 14 (Ground)</p>
+                      </div>
+                      <div className="mt-3 p-3 bg-background rounded border">
+                        <p className="text-xs font-semibold mb-2">Connecting Water Pump to Relay:</p>
+                        <div className="space-y-1 text-xs font-mono">
+                          <p><span className="text-accent">COM</span> → 12V Power Supply (+)</p>
+                          <p><span className="text-accent">NO (Normally Open)</span> → Water Pump (+)</p>
+                          <p><span className="text-muted-foreground">Pump (-)</span> → 12V Power Supply (-)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-primary/10 border-2 border-primary/30">
+                      <p className="font-semibold mb-3 text-sm">📍 GPIO Pin Quick Reference</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                        <div className="p-2 bg-background rounded">Pin 1: 3.3V Power</div>
+                        <div className="p-2 bg-background rounded">Pin 2: 5V Power</div>
+                        <div className="p-2 bg-background rounded">Pin 4: 5V Power</div>
+                        <div className="p-2 bg-background rounded">Pin 6: Ground</div>
+                        <div className="p-2 bg-background rounded text-primary font-bold">Pin 7: GPIO 4 (DHT22)</div>
+                        <div className="p-2 bg-background rounded">Pin 9: Ground</div>
+                        <div className="p-2 bg-background rounded text-secondary font-bold">Pin 11: GPIO 17 (Moisture)</div>
+                        <div className="p-2 bg-background rounded text-accent font-bold">Pin 12: GPIO 18 (Relay)</div>
+                        <div className="p-2 bg-background rounded">Pin 14: Ground</div>
                       </div>
                     </div>
                   </div>
@@ -154,8 +191,8 @@ const Documentation = () => {
             <TabsContent value="software" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Python Dependencies</CardTitle>
-                  <CardDescription>Install required packages on Raspberry Pi</CardDescription>
+                  <CardTitle>Step 1: System Update</CardTitle>
+                  <CardDescription>Update Raspberry Pi OS packages</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="p-4 bg-muted rounded-lg font-mono text-sm">
@@ -165,8 +202,7 @@ const Documentation = () => {
                     </div>
                     <pre className="text-foreground whitespace-pre-wrap">
 {`sudo apt-get update
-sudo apt-get install python3-pip
-sudo pip3 install Adafruit_DHT RPi.GPIO Flask`}
+sudo apt-get upgrade -y`}
                     </pre>
                   </div>
                 </CardContent>
@@ -174,49 +210,79 @@ sudo pip3 install Adafruit_DHT RPi.GPIO Flask`}
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Sensor Reading Script</CardTitle>
-                  <CardDescription>Python code to read sensor data</CardDescription>
+                  <CardTitle>Step 2: Install Dependencies</CardTitle>
+                  <CardDescription>Python libraries for sensors and API</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="p-4 bg-muted rounded-lg font-mono text-sm">
+                    <pre className="text-foreground whitespace-pre-wrap">
+{`# Install Python and pip
+sudo apt-get install python3 python3-pip -y
+
+# Install GPIO library
+sudo apt-get install python3-rpi.gpio -y
+
+# Install DHT sensor library
+sudo pip3 install Adafruit_DHT
+
+# Install Flask for API server
+sudo pip3 install Flask flask-cors`}
+                    </pre>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Step 3: Create sensors.py</CardTitle>
+                  <CardDescription>Sensor reading module</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="p-4 bg-muted rounded-lg overflow-x-auto">
                     <div className="flex items-center gap-2 mb-3 text-muted-foreground text-sm">
                       <Code className="h-4 w-4" />
-                      <span>sensor_reader.py</span>
+                      <span>~/greenhouse-monitor/sensors.py</span>
                     </div>
                     <pre className="text-xs font-mono text-foreground whitespace-pre">
 {`import Adafruit_DHT
 import RPi.GPIO as GPIO
-import time
+from datetime import datetime
 
-# DHT22 Configuration
-sensor = Adafruit_DHT.DHT22
-pin_dht = 4
+# DHT22 Setup
+DHT_SENSOR = Adafruit_DHT.DHT22
+DHT_PIN = 4
 
-# Soil Moisture Configuration
+# Soil Moisture Setup
 GPIO.setmode(GPIO.BCM)
-moisture_pin = 17
-GPIO.setup(moisture_pin, GPIO.IN)
+MOISTURE_PIN = 17
+GPIO.setup(MOISTURE_PIN, GPIO.IN)
 
-def read_sensors():
-    # Read temperature and humidity
-    humidity, temperature = Adafruit_DHT.read_retry(sensor, pin_dht)
-    
-    # Read soil moisture (HIGH = Dry, LOW = Wet)
-    moisture_status = "Dry" if GPIO.input(moisture_pin) == GPIO.HIGH else "Wet"
-    
+# Relay Setup
+RELAY_PIN = 18
+GPIO.setup(RELAY_PIN, GPIO.OUT)
+GPIO.output(RELAY_PIN, GPIO.LOW)
+
+def read_dht22():
+    humidity, temperature = Adafruit_DHT.read_retry(DHT_SENSOR, DHT_PIN)
+    if humidity and temperature:
+        return {'temperature': round(temperature, 1), 'humidity': round(humidity, 1)}
+    return {'temperature': None, 'humidity': None}
+
+def read_soil_moisture():
+    return "Dry" if GPIO.input(MOISTURE_PIN) == GPIO.HIGH else "Wet"
+
+def get_all_sensor_data():
+    dht_data = read_dht22()
     return {
-        "temperature": temperature,
-        "humidity": humidity,
-        "soil_moisture": moisture_status
+        'temperature': dht_data['temperature'],
+        'humidity': dht_data['humidity'],
+        'soil_moisture': read_soil_moisture(),
+        'timestamp': datetime.now().isoformat()
     }
 
-if __name__ == "__main__":
-    while True:
-        data = read_sensors()
-        print(f"Temp: {data['temperature']}°C | "
-              f"Humidity: {data['humidity']}% | "
-              f"Soil: {data['soil_moisture']}")
-        time.sleep(2)`}
+def control_relay(state):
+    GPIO.output(RELAY_PIN, GPIO.HIGH if state else GPIO.LOW)
+    return state`}
                     </pre>
                   </div>
                 </CardContent>
@@ -224,57 +290,173 @@ if __name__ == "__main__":
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Flask API Server</CardTitle>
-                  <CardDescription>REST API endpoint for the dashboard</CardDescription>
+                  <CardTitle>Step 4: Create app.py</CardTitle>
+                  <CardDescription>Flask API server with CORS support</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="p-4 bg-muted rounded-lg overflow-x-auto">
                     <div className="flex items-center gap-2 mb-3 text-muted-foreground text-sm">
                       <Code className="h-4 w-4" />
-                      <span>app.py</span>
+                      <span>~/greenhouse-monitor/app.py</span>
                     </div>
                     <pre className="text-xs font-mono text-foreground whitespace-pre">
 {`from flask import Flask, jsonify
-import Adafruit_DHT
-import RPi.GPIO as GPIO
+from flask_cors import CORS
+import sensors
 
 app = Flask(__name__)
+CORS(app)  # Allow React dashboard to connect
 
-# Sensor setup
-sensor = Adafruit_DHT.DHT22
-pin_dht = 4
-GPIO.setmode(GPIO.BCM)
-moisture_pin = 17
-GPIO.setup(moisture_pin, GPIO.IN)
-
-# Relay setup
-relay_pin = 18
-GPIO.setup(relay_pin, GPIO.OUT)
+@app.route('/api/status', methods=['GET'])
+def status():
+    return jsonify({'status': 'online', 'message': 'System active'})
 
 @app.route('/api/sensors', methods=['GET'])
-def get_sensor_data():
-    humidity, temperature = Adafruit_DHT.read_retry(sensor, pin_dht)
-    moisture = "Dry" if GPIO.input(moisture_pin) == GPIO.HIGH else "Wet"
-    
-    return jsonify({
-        "temperature": temperature,
-        "humidity": humidity,
-        "soil_moisture": moisture
-    })
+def get_sensors():
+    data = sensors.get_all_sensor_data()
+    return jsonify(data)
 
 @app.route('/api/irrigation/<action>', methods=['POST'])
 def control_irrigation(action):
-    if action == "on":
-        GPIO.output(relay_pin, GPIO.HIGH)
-        return jsonify({"status": "on"})
-    else:
-        GPIO.output(relay_pin, GPIO.LOW)
-        return jsonify({"status": "off"})
+    if action == 'on':
+        sensors.control_relay(True)
+        return jsonify({'status': 'success', 'message': 'Irrigation ON'})
+    elif action == 'off':
+        sensors.control_relay(False)
+        return jsonify({'status': 'success', 'message': 'Irrigation OFF'})
+    return jsonify({'error': 'Invalid action'}), 400
+
+@app.route('/api/fan/<action>', methods=['POST'])
+def control_fan(action):
+    # Add second relay if you have a fan
+    return jsonify({'status': 'success', 'message': f'Fan {action}'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)`}
+    app.run(host='0.0.0.0', port=5000, debug=False)`}
                     </pre>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Step 5: Test Your Setup</CardTitle>
+                  <CardDescription>Verify sensors and API are working</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Test sensors directly:</p>
+                    <div className="p-3 bg-muted rounded font-mono text-xs">
+                      sudo python3 sensors.py
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Start API server:</p>
+                    <div className="p-3 bg-muted rounded font-mono text-xs">
+                      sudo python3 app.py
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Find your Pi's IP:</p>
+                    <div className="p-3 bg-muted rounded font-mono text-xs">
+                      hostname -I
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Setup Guide Tab */}
+            <TabsContent value="setup" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Complete Setup Checklist</CardTitle>
+                  <CardDescription>Follow these steps to get your system running</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {[
+                      { step: 1, title: "Set up Raspberry Pi", desc: "Flash Raspberry Pi OS and boot your Pi" },
+                      { step: 2, title: "Connect hardware", desc: "Wire sensors and relay according to GPIO diagram" },
+                      { step: 3, title: "Install software", desc: "Update system and install Python dependencies" },
+                      { step: 4, title: "Create project files", desc: "Create sensors.py and app.py in ~/greenhouse-monitor" },
+                      { step: 5, title: "Test sensors", desc: "Run sudo python3 sensors.py to verify readings" },
+                      { step: 6, title: "Start API server", desc: "Run sudo python3 app.py to start Flask server" },
+                      { step: 7, title: "Find Pi's IP", desc: "Run hostname -I and note the IP address" },
+                      { step: 8, title: "Configure dashboard", desc: "Enter Pi's IP in System Configuration" },
+                      { step: 9, title: "Test connection", desc: "Click 'Test Connection' to verify setup" },
+                      { step: 10, title: "Monitor greenhouse!", desc: "View real-time data and control devices" },
+                    ].map((item) => (
+                      <div key={item.step} className="flex items-start gap-3 p-3 rounded-lg border">
+                        <div className="flex-shrink-0 h-6 w-6 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-bold">
+                          {item.step}
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Common Issues & Solutions</CardTitle>
+                  <CardDescription>Troubleshooting guide</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="font-medium text-sm mb-1">Sensors not reading?</p>
+                    <p className="text-xs text-muted-foreground">Check wiring connections and GPIO pin numbers. Try running with sudo.</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="font-medium text-sm mb-1">Can't connect to API?</p>
+                    <p className="text-xs text-muted-foreground">Verify Pi's IP address, ensure Flask is running, check firewall settings.</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="font-medium text-sm mb-1">Relay not switching?</p>
+                    <p className="text-xs text-muted-foreground">Check relay power supply, verify GPIO 18 connection, test relay LED indicator.</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted">
+                    <p className="font-medium text-sm mb-1">Permission denied errors?</p>
+                    <p className="text-xs text-muted-foreground">Run Python scripts with sudo: sudo python3 app.py</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-primary" />
+                    Ready for Your Presentation
+                  </CardTitle>
+                  <CardDescription>Tips for graduation project demo</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Have backup screenshots/data ready in case of technical issues</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Explain how solar panels power the system (energy efficiency angle)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Demonstrate real-time monitoring and manual/automatic control</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Show the relay controlling the water pump in action</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">•</span>
+                      <span>Discuss potential improvements (data logging, alerts, mobile app)</span>
+                    </li>
+                  </ul>
                 </CardContent>
               </Card>
             </TabsContent>

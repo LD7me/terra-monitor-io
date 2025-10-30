@@ -3,8 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
+import { SystemConfig } from "@/components/SystemConfig";
 import { Thermometer, Droplets, Sprout, Power, Fan, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { fetchSensorData, controlIrrigation, controlFan, getSystemConfig } from "@/lib/api";
 
 interface SensorData {
   temperature: number;
@@ -25,16 +27,39 @@ const Dashboard = () => {
   const [fanActive, setFanActive] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Simulate sensor data updates
+  // Fetch real sensor data from Raspberry Pi
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSensorData(prev => ({
-        temperature: Number((23 + Math.random() * 4).toFixed(1)),
-        humidity: Number((60 + Math.random() * 15).toFixed(0)),
-        soilMoisture: Math.random() > 0.5 ? "Wet" : "Dry",
-        timestamp: new Date().toISOString(),
-      }));
-    }, 3000);
+    const config = getSystemConfig();
+    if (!config) {
+      setIsConnected(false);
+      return;
+    }
+
+    const fetchData = async () => {
+      try {
+        const data = await fetchSensorData();
+        setSensorData({
+          temperature: data.temperature,
+          humidity: data.humidity,
+          soilMoisture: data.soil_moisture as "Wet" | "Dry",
+          timestamp: data.timestamp,
+        });
+        setIsConnected(true);
+      } catch (error) {
+        console.error("Failed to fetch sensor data:", error);
+        setIsConnected(false);
+        // Fall back to simulated data
+        setSensorData(prev => ({
+          temperature: Number((23 + Math.random() * 4).toFixed(1)),
+          humidity: Number((60 + Math.random() * 15).toFixed(0)),
+          soilMoisture: Math.random() > 0.5 ? "Wet" : "Dry",
+          timestamp: new Date().toISOString(),
+        }));
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
 
     return () => clearInterval(interval);
   }, []);
@@ -52,14 +77,26 @@ const Dashboard = () => {
     }));
   };
 
-  const toggleIrrigation = () => {
-    setIrrigationActive(!irrigationActive);
-    toast.success(irrigationActive ? "Irrigation turned OFF" : "Irrigation turned ON");
+  const toggleIrrigation = async () => {
+    try {
+      const action = irrigationActive ? 'off' : 'on';
+      await controlIrrigation(action);
+      setIrrigationActive(!irrigationActive);
+      toast.success(irrigationActive ? "Irrigation turned OFF" : "Irrigation turned ON");
+    } catch (error) {
+      toast.error("Failed to control irrigation. Check your connection.");
+    }
   };
 
-  const toggleFan = () => {
-    setFanActive(!fanActive);
-    toast.success(fanActive ? "Fan turned OFF" : "Fan turned ON");
+  const toggleFan = async () => {
+    try {
+      const action = fanActive ? 'off' : 'on';
+      await controlFan(action);
+      setFanActive(!fanActive);
+      toast.success(fanActive ? "Fan turned OFF" : "Fan turned ON");
+    } catch (error) {
+      toast.error("Failed to control fan. Check your connection.");
+    }
   };
 
   const getStatusColor = (value: number, min: number, max: number) => {
@@ -101,11 +138,16 @@ const Dashboard = () => {
             </div>
           </div>
 
+          {/* System Configuration */}
+          <div className="mb-8">
+            <SystemConfig />
+          </div>
+
           {/* Connection Status */}
           <div className="mb-6">
             <Badge variant={isConnected ? "default" : "secondary"} className="gap-2">
               <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
-              {isConnected ? "System Online" : "Simulated Data"}
+              {isConnected ? "Connected to Raspberry Pi" : "Not Connected"}
             </Badge>
             <p className="text-xs text-muted-foreground mt-2">
               Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
@@ -252,18 +294,29 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* API Connection Info */}
-          <Card className="mt-6 border-2 bg-muted/30">
+          {/* Setup Instructions */}
+          <Card className="mt-6 border-2 bg-primary/5">
             <CardHeader>
-              <CardTitle className="text-sm">API Configuration</CardTitle>
+              <CardTitle className="text-sm">🚀 Quick Setup</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 text-sm font-mono text-muted-foreground">
-                <p><span className="text-foreground">Endpoint:</span> http://your-raspberry-pi-ip:5000/api</p>
-                <p><span className="text-foreground">WebSocket:</span> ws://your-raspberry-pi-ip:5000/ws</p>
-                <p className="text-xs pt-2">
-                  💡 Configure your Raspberry Pi Flask server endpoint in the dashboard settings to connect to real hardware
-                </p>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold">1.</span>
+                  <span>Install dependencies on your Raspberry Pi (see Documentation)</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold">2.</span>
+                  <span>Run Flask API server: <code className="bg-muted px-2 py-1 rounded">sudo python3 app.py</code></span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold">3.</span>
+                  <span>Enter your Pi's IP address in System Configuration above</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-primary font-bold">4.</span>
+                  <span>Click "Test Connection" to verify setup</span>
+                </div>
               </div>
             </CardContent>
           </Card>
