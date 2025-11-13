@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import { SystemConfig } from "@/components/SystemConfig";
+import { AlertConfig } from "@/components/AlertConfig";
+import { HistoricalData } from "@/components/HistoricalData";
+import { WeatherWidget } from "@/components/WeatherWidget";
 import { Thermometer, Droplets, Sprout, Power, Fan, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { fetchSensorData, controlIrrigation, controlFan, getSystemConfig } from "@/lib/api";
@@ -293,6 +296,25 @@ const Dashboard = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* New Features Grid */}
+          <div className="grid md:grid-cols-2 gap-6 mt-6">
+            <AlertConfig 
+              currentTemp={sensorData.temperature}
+              currentHumidity={sensorData.humidity}
+              soilMoisture={sensorData.soilMoisture}
+            />
+            <WeatherWidget />
+          </div>
+
+          {/* Historical Data */}
+          <div className="mt-6">
+            <HistoricalData
+              currentTemp={sensorData.temperature}
+              currentHumidity={sensorData.humidity}
+              timestamp={sensorData.timestamp}
+            />
+          </div>
 
           {/* Setup Instructions */}
           <Card className="mt-6 border-2 bg-primary/5">
