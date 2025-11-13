@@ -2,7 +2,10 @@ import Navigation from "@/components/Navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Code, Cpu, Database, Wifi, Terminal, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Code, Cpu, Database, Wifi, Terminal, CheckCircle, Download } from "lucide-react";
+import { downloadSetupFiles } from "@/lib/downloadSetup";
+import { toast } from "sonner";
 
 const Documentation = () => {
   return (
@@ -12,11 +15,25 @@ const Documentation = () => {
       <div className="pt-24 pb-12 px-4">
         <div className="container mx-auto max-w-6xl">
           {/* Header */}
-          <div className="mb-12">
-            <h1 className="text-4xl font-bold mb-4">Documentation</h1>
-            <p className="text-lg text-muted-foreground">
-              Complete guide to building and deploying your greenhouse monitoring system
-            </p>
+          <div className="mb-12 flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-4xl font-bold mb-4">Documentation</h1>
+              <p className="text-lg text-muted-foreground">
+                Complete guide to building and deploying your greenhouse monitoring system
+              </p>
+            </div>
+            <Button 
+              size="lg"
+              className="gap-2"
+              onClick={async () => {
+                toast.info("Preparing download...");
+                await downloadSetupFiles();
+                toast.success("Setup files downloaded!");
+              }}
+            >
+              <Download className="h-5 w-5" />
+              Download All Files
+            </Button>
           </div>
 
           <Tabs defaultValue="overview" className="space-y-8">

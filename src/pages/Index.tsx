@@ -2,7 +2,9 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
-import { Thermometer, Droplets, Sprout, Activity, BookOpen, Zap } from "lucide-react";
+import { Thermometer, Droplets, Sprout, Activity, BookOpen, Zap, Download } from "lucide-react";
+import { downloadSetupFiles } from "@/lib/downloadSetup";
+import { toast } from "sonner";
 
 const Index = () => {
   return (
@@ -26,7 +28,7 @@ const Index = () => {
             Track temperature, humidity, and soil moisture with Raspberry Pi IoT technology.
           </p>
 
-          <div className="flex gap-4 justify-center">
+          <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/dashboard">
               <Button variant="hero" size="lg" className="gap-2">
                 <Activity className="h-5 w-5" />
@@ -39,6 +41,19 @@ const Index = () => {
                 Read Documentation
               </Button>
             </Link>
+            <Button 
+              variant="outline" 
+              size="lg" 
+              className="gap-2"
+              onClick={async () => {
+                toast.info("Preparing download...");
+                await downloadSetupFiles();
+                toast.success("Setup files downloaded!");
+              }}
+            >
+              <Download className="h-5 w-5" />
+              Download Setup Files
+            </Button>
           </div>
         </div>
       </section>
