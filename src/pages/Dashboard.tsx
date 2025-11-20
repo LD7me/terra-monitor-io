@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,84 +7,35 @@ import { SystemConfig } from "@/components/SystemConfig";
 import { AlertConfig } from "@/components/AlertConfig";
 import { HistoricalData } from "@/components/HistoricalData";
 import { WeatherWidget } from "@/components/WeatherWidget";
-import { Thermometer, Droplets, Sprout, Power, Fan, RefreshCw } from "lucide-react";
+import { Thermometer, Droplets, Sprout, Power, Fan, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { fetchSensorData, controlIrrigation, controlFan, getSystemConfig } from "@/lib/api";
-
-interface SensorData {
-  temperature: number;
-  humidity: number;
-  soilMoisture: "Wet" | "Dry";
-  timestamp: string;
-}
+import { controlIrrigation, controlFan } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { useSensorData } from "@/hooks/useSensorData";
+import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
-  const [sensorData, setSensorData] = useState<SensorData>({
-    temperature: 24.5,
-    humidity: 65,
-    soilMoisture: "Wet",
-    timestamp: new Date().toISOString(),
-  });
-  
+  const { user, signOut, isAdmin } = useAuth();
+  const { sensorData, isConnected } = useSensorData();
   const [irrigationActive, setIrrigationActive] = useState(false);
   const [fanActive, setFanActive] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-
-  // Fetch real sensor data from Raspberry Pi
-  useEffect(() => {
-    const config = getSystemConfig();
-    if (!config) {
-      setIsConnected(false);
-      return;
-    }
-
-    const fetchData = async () => {
-      try {
-        const data = await fetchSensorData();
-        setSensorData({
-          temperature: data.temperature,
-          humidity: data.humidity,
-          soilMoisture: data.soil_moisture as "Wet" | "Dry",
-          timestamp: data.timestamp,
-        });
-        setIsConnected(true);
-      } catch (error) {
-        console.error("Failed to fetch sensor data:", error);
-        setIsConnected(false);
-        // Fall back to simulated data
-        setSensorData(prev => ({
-          temperature: Number((23 + Math.random() * 4).toFixed(1)),
-          humidity: Number((60 + Math.random() * 15).toFixed(0)),
-          soilMoisture: Math.random() > 0.5 ? "Wet" : "Dry",
-          timestamp: new Date().toISOString(),
-        }));
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const connectToSystem = () => {
-    setIsConnected(true);
-    toast.success("Connected to Raspberry Pi system");
-  };
-
-  const refreshData = () => {
-    toast.info("Refreshing sensor data...");
-    setSensorData(prev => ({
-      ...prev,
-      timestamp: new Date().toISOString(),
-    }));
-  };
 
   const toggleIrrigation = async () => {
     try {
       const action = irrigationActive ? 'off' : 'on';
       await controlIrrigation(action);
       setIrrigationActive(!irrigationActive);
+      
+      // Log to database
+      await supabase.from('irrigation_logs').insert({
+        user_id: user?.id,
+        action,
+        trigger_type: 'manual',
+        soil_moisture: sensorData.soilMoisture,
+        temperature: sensorData.temperature,
+        reason: 'Manual control',
+      });
+      
       toast.success(irrigationActive ? "Irrigation turned OFF" : "Irrigation turned ON");
     } catch (error) {
       toast.error("Failed to control irrigation. Check your connection.");
@@ -121,23 +72,9 @@ const Dashboard = () => {
               <p className="text-muted-foreground">Real-time greenhouse environmental monitoring</p>
             </div>
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={refreshData}
-                className="gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Refresh
-              </Button>
-              <Button 
-                variant={isConnected ? "default" : "hero"}
-                size="sm"
-                onClick={connectToSystem}
-                disabled={isConnected}
-              >
-                {isConnected ? "Connected" : "Connect to System"}
-              </Button>
+              <Badge variant={isConnected ? "default" : "secondary"}>
+                {isConnected ? "Connected" : "Simulated"}
+              </Badge>
             </div>
           </div>
 
@@ -309,11 +246,7 @@ const Dashboard = () => {
 
           {/* Historical Data */}
           <div className="mt-6">
-            <HistoricalData
-              currentTemp={sensorData.temperature}
-              currentHumidity={sensorData.humidity}
-              timestamp={sensorData.timestamp}
-            />
+            <HistoricalData />
           </div>
 
           {/* Setup Instructions */}

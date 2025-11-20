@@ -29,10 +29,10 @@ const Index = () => {
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center">
-            <Link to="/dashboard">
+            <Link to="/auth">
               <Button variant="hero" size="lg" className="gap-2">
                 <Activity className="h-5 w-5" />
-                View Dashboard
+                Get Started
               </Button>
             </Link>
             <Link to="/documentation">

@@ -1,1 +1,7 @@
 project_id = "skorxurbkdwfwgigegez"
+
+[functions.send-alert-email]
+verify_jwt = false
+
+[functions.check-irrigation]
+verify_jwt = false

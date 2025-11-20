@@ -1,50 +1,10 @@
-import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { TrendingUp, Database } from "lucide-react";
+import { useHistoricalData } from "@/hooks/useHistoricalData";
 
-interface DataPoint {
-  timestamp: string;
-  temperature: number;
-  humidity: number;
-}
-
-interface HistoricalDataProps {
-  currentTemp: number;
-  currentHumidity: number;
-  timestamp: string;
-}
-
-export const HistoricalData = ({ currentTemp, currentHumidity, timestamp }: HistoricalDataProps) => {
-  const [data, setData] = useState<DataPoint[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("sensor_history");
-    if (saved) {
-      setData(JSON.parse(saved));
-    }
-  }, []);
-
-  useEffect(() => {
-    setData((prev) => {
-      const newPoint: DataPoint = {
-        timestamp: new Date(timestamp).toLocaleTimeString(),
-        temperature: currentTemp,
-        humidity: currentHumidity,
-      };
-
-      const updated = [...prev, newPoint];
-      const last50 = updated.slice(-50);
-      
-      localStorage.setItem("sensor_history", JSON.stringify(last50));
-      return last50;
-    });
-  }, [currentTemp, currentHumidity, timestamp]);
-
-  const clearHistory = () => {
-    localStorage.removeItem("sensor_history");
-    setData([]);
-  };
+export const HistoricalData = () => {
+  const { data } = useHistoricalData();
 
   return (
     <Card className="border-2">
