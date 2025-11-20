@@ -4,15 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, Bell, Settings } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { AlertTriangle, Bell, Settings, Mail } from "lucide-react";
 import { toast } from "sonner";
-
-interface AlertThresholds {
-  tempMin: number;
-  tempMax: number;
-  humidityMin: number;
-  humidityMax: number;
-}
+import { useAlertConfig } from "@/hooks/useAlertConfig";
 
 interface AlertConfigProps {
   currentTemp: number;
@@ -21,37 +16,29 @@ interface AlertConfigProps {
 }
 
 export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: AlertConfigProps) => {
-  const [thresholds, setThresholds] = useState<AlertThresholds>({
-    tempMin: 20,
-    tempMax: 28,
-    humidityMin: 60,
-    humidityMax: 80,
-  });
-
+  const { thresholds, saveThresholds } = useAlertConfig();
+  const [localThresholds, setLocalThresholds] = useState(thresholds);
   const [showConfig, setShowConfig] = useState(false);
   const [alerts, setAlerts] = useState<string[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem("alert_thresholds");
-    if (saved) {
-      setThresholds(JSON.parse(saved));
-    }
-  }, []);
+    setLocalThresholds(thresholds);
+  }, [thresholds]);
 
   useEffect(() => {
     const newAlerts: string[] = [];
     
-    if (currentTemp < thresholds.tempMin) {
-      newAlerts.push(`Temperature too low: ${currentTemp}°C (min: ${thresholds.tempMin}°C)`);
+    if (currentTemp < localThresholds.tempMin) {
+      newAlerts.push(`Temperature too low: ${currentTemp}°C (min: ${localThresholds.tempMin}°C)`);
     }
-    if (currentTemp > thresholds.tempMax) {
-      newAlerts.push(`Temperature too high: ${currentTemp}°C (max: ${thresholds.tempMax}°C)`);
+    if (currentTemp > localThresholds.tempMax) {
+      newAlerts.push(`Temperature too high: ${currentTemp}°C (max: ${localThresholds.tempMax}°C)`);
     }
-    if (currentHumidity < thresholds.humidityMin) {
-      newAlerts.push(`Humidity too low: ${currentHumidity}% (min: ${thresholds.humidityMin}%)`);
+    if (currentHumidity < localThresholds.humidityMin) {
+      newAlerts.push(`Humidity too low: ${currentHumidity}% (min: ${localThresholds.humidityMin}%)`);
     }
-    if (currentHumidity > thresholds.humidityMax) {
-      newAlerts.push(`Humidity too high: ${currentHumidity}% (max: ${thresholds.humidityMax}%)`);
+    if (currentHumidity > localThresholds.humidityMax) {
+      newAlerts.push(`Humidity too high: ${currentHumidity}% (max: ${localThresholds.humidityMax}%)`);
     }
     if (soilMoisture === "Dry") {
       newAlerts.push("Soil moisture is dry - irrigation recommended");
@@ -64,11 +51,10 @@ export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: Aler
     }
 
     setAlerts(newAlerts);
-  }, [currentTemp, currentHumidity, soilMoisture, thresholds]);
+  }, [currentTemp, currentHumidity, soilMoisture, localThresholds]);
 
-  const saveThresholds = () => {
-    localStorage.setItem("alert_thresholds", JSON.stringify(thresholds));
-    toast.success("Alert thresholds saved");
+  const handleSaveThresholds = () => {
+    saveThresholds(localThresholds);
     setShowConfig(false);
   };
 
@@ -119,9 +105,9 @@ export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: Aler
                 <Input
                   id="tempMin"
                   type="number"
-                  value={thresholds.tempMin}
+                  value={localThresholds.tempMin}
                   onChange={(e) =>
-                    setThresholds({ ...thresholds, tempMin: Number(e.target.value) })
+                    setLocalThresholds({ ...localThresholds, tempMin: Number(e.target.value) })
                   }
                 />
               </div>
@@ -130,9 +116,9 @@ export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: Aler
                 <Input
                   id="tempMax"
                   type="number"
-                  value={thresholds.tempMax}
+                  value={localThresholds.tempMax}
                   onChange={(e) =>
-                    setThresholds({ ...thresholds, tempMax: Number(e.target.value) })
+                    setLocalThresholds({ ...localThresholds, tempMax: Number(e.target.value) })
                   }
                 />
               </div>
@@ -141,9 +127,9 @@ export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: Aler
                 <Input
                   id="humidityMin"
                   type="number"
-                  value={thresholds.humidityMin}
+                  value={localThresholds.humidityMin}
                   onChange={(e) =>
-                    setThresholds({ ...thresholds, humidityMin: Number(e.target.value) })
+                    setLocalThresholds({ ...localThresholds, humidityMin: Number(e.target.value) })
                   }
                 />
               </div>
@@ -152,14 +138,14 @@ export const AlertConfig = ({ currentTemp, currentHumidity, soilMoisture }: Aler
                 <Input
                   id="humidityMax"
                   type="number"
-                  value={thresholds.humidityMax}
+                  value={localThresholds.humidityMax}
                   onChange={(e) =>
-                    setThresholds({ ...thresholds, humidityMax: Number(e.target.value) })
+                    setLocalThresholds({ ...localThresholds, humidityMax: Number(e.target.value) })
                   }
                 />
               </div>
             </div>
-            <Button onClick={saveThresholds} className="w-full">
+            <Button onClick={handleSaveThresholds} className="w-full">
               Save Thresholds
             </Button>
           </div>
