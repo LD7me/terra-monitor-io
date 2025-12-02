@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchSensorData as fetchFromPi, getSystemConfig } from '@/lib/api';
 
 interface SensorData {
   temperature: number;
@@ -13,9 +12,9 @@ interface SensorData {
 export function useSensorData() {
   const { user } = useAuth();
   const [sensorData, setSensorData] = useState<SensorData>({
-    temperature: 24.5,
-    humidity: 65,
-    soilMoisture: "Wet",
+    temperature: 0,
+    humidity: 0,
+    soilMoisture: "Dry",
     timestamp: new Date().toISOString(),
   });
   const [isConnected, setIsConnected] = useState(false);
@@ -23,62 +22,78 @@ export function useSensorData() {
   useEffect(() => {
     if (!user) return;
 
-    const fetchData = async () => {
-      const config = getSystemConfig();
-      
-      try {
-        if (config) {
-          // Try to fetch from Raspberry Pi
-          const data = await fetchFromPi();
-          const newData = {
-            temperature: data.temperature,
-            humidity: data.humidity,
-            soilMoisture: data.soil_moisture as "Wet" | "Dry",
-            timestamp: data.timestamp,
-          };
-          setSensorData(newData);
-          setIsConnected(true);
+    // Fetch latest reading from database
+    const fetchLatest = async () => {
+      const { data, error } = await supabase
+        .from('sensor_readings')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-          // Save to database
-          await supabase.from('sensor_readings').insert({
-            user_id: user.id,
-            temperature: data.temperature,
-            humidity: data.humidity,
-            soil_moisture: data.soil_moisture,
-            timestamp: data.timestamp,
-          });
-
-          // Check for alerts and automated irrigation
-          await checkAlertsAndIrrigation(newData);
-        } else {
-          // Simulated data when no Pi is connected
-          const simulated = {
-            temperature: Number((23 + Math.random() * 4).toFixed(1)),
-            humidity: Number((60 + Math.random() * 15).toFixed(0)),
-            soilMoisture: Math.random() > 0.5 ? "Wet" : "Dry" as "Wet" | "Dry",
-            timestamp: new Date().toISOString(),
-          };
-          setSensorData(simulated);
-          setIsConnected(false);
-
-          // Still save simulated data
-          await supabase.from('sensor_readings').insert({
-            user_id: user.id,
-            temperature: simulated.temperature,
-            humidity: simulated.humidity,
-            soil_moisture: simulated.soilMoisture,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch sensor data:", error);
-        setIsConnected(false);
+      if (data && !error) {
+        setSensorData({
+          temperature: data.temperature,
+          humidity: data.humidity,
+          soilMoisture: data.soil_moisture as "Wet" | "Dry",
+          timestamp: data.timestamp,
+        });
+        // Consider connected if we have recent data (within last 30 seconds)
+        const lastUpdate = new Date(data.timestamp).getTime();
+        const now = Date.now();
+        setIsConnected(now - lastUpdate < 30000);
+        
+        // Check alerts
+        await checkAlertsAndIrrigation({
+          temperature: data.temperature,
+          humidity: data.humidity,
+          soilMoisture: data.soil_moisture as "Wet" | "Dry",
+          timestamp: data.timestamp,
+        });
       }
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
+    fetchLatest();
 
-    return () => clearInterval(interval);
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel('sensor_readings_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sensor_readings',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newReading = payload.new as any;
+          setSensorData({
+            temperature: newReading.temperature,
+            humidity: newReading.humidity,
+            soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
+            timestamp: newReading.timestamp,
+          });
+          setIsConnected(true);
+          
+          checkAlertsAndIrrigation({
+            temperature: newReading.temperature,
+            humidity: newReading.humidity,
+            soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
+            timestamp: newReading.timestamp,
+          });
+        }
+      )
+      .subscribe();
+
+    // Poll every 10 seconds as backup
+    const interval = setInterval(fetchLatest, 10000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, [user]);
 
   const checkAlertsAndIrrigation = async (data: SensorData) => {
