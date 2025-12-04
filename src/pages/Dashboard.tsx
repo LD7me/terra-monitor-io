@@ -7,50 +7,74 @@ import { SystemConfig } from "@/components/SystemConfig";
 import { AlertConfig } from "@/components/AlertConfig";
 import { HistoricalData } from "@/components/HistoricalData";
 import { WeatherWidget } from "@/components/WeatherWidget";
-import { Thermometer, Droplets, Sprout, Power, Fan, LogOut } from "lucide-react";
+import { Thermometer, Droplets, Sprout, Power, Fan, Cloud } from "lucide-react";
 import { toast } from "sonner";
-import { controlIrrigation, controlFan } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSensorData } from "@/hooks/useSensorData";
 import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
-  const { user, signOut, isAdmin } = useAuth();
+  const { user } = useAuth();
   const { sensorData, isConnected } = useSensorData();
   const [irrigationActive, setIrrigationActive] = useState(false);
   const [fanActive, setFanActive] = useState(false);
+  const [sendingCommand, setSendingCommand] = useState(false);
 
-  const toggleIrrigation = async () => {
+  const sendDeviceCommand = async (device: 'irrigation' | 'fan', action: 'on' | 'off') => {
+    if (!user?.id) {
+      toast.error("You must be logged in to control devices");
+      return;
+    }
+
+    setSendingCommand(true);
     try {
-      const action = irrigationActive ? 'off' : 'on';
-      await controlIrrigation(action);
-      setIrrigationActive(!irrigationActive);
-      
-      // Log to database
-      await supabase.from('irrigation_logs').insert({
-        user_id: user?.id,
+      const { error } = await supabase.from('device_commands').insert({
+        user_id: user.id,
+        device,
         action,
-        trigger_type: 'manual',
-        soil_moisture: sensorData.soilMoisture,
-        temperature: sensorData.temperature,
-        reason: 'Manual control',
+        status: 'pending'
       });
-      
-      toast.success(irrigationActive ? "Irrigation turned OFF" : "Irrigation turned ON");
+
+      if (error) throw error;
+
+      // Log irrigation actions
+      if (device === 'irrigation') {
+        await supabase.from('irrigation_logs').insert({
+          user_id: user.id,
+          action,
+          trigger_type: 'manual',
+          soil_moisture: sensorData.soilMoisture,
+          temperature: sensorData.temperature,
+          reason: 'Manual cloud control',
+        });
+      }
+
+      toast.success(`Command sent: ${device} ${action.toUpperCase()}`, {
+        description: "Waiting for Pi to execute..."
+      });
+
+      // Update local state optimistically
+      if (device === 'irrigation') {
+        setIrrigationActive(action === 'on');
+      } else {
+        setFanActive(action === 'on');
+      }
     } catch (error) {
-      toast.error("Failed to control irrigation. Check your connection.");
+      console.error('Failed to send command:', error);
+      toast.error("Failed to send command");
+    } finally {
+      setSendingCommand(false);
     }
   };
 
-  const toggleFan = async () => {
-    try {
-      const action = fanActive ? 'off' : 'on';
-      await controlFan(action);
-      setFanActive(!fanActive);
-      toast.success(fanActive ? "Fan turned OFF" : "Fan turned ON");
-    } catch (error) {
-      toast.error("Failed to control fan. Check your connection.");
-    }
+  const toggleIrrigation = () => {
+    const action = irrigationActive ? 'off' : 'on';
+    sendDeviceCommand('irrigation', action);
+  };
+
+  const toggleFan = () => {
+    const action = fanActive ? 'off' : 'on';
+    sendDeviceCommand('fan', action);
   };
 
   const getStatusColor = (value: number, min: number, max: number) => {
@@ -87,7 +111,7 @@ const Dashboard = () => {
           <div className="mb-6">
             <Badge variant={isConnected ? "default" : "secondary"} className="gap-2">
               <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
-              {isConnected ? "Connected to Raspberry Pi" : "Not Connected"}
+              {isConnected ? "Receiving Data from Cloud" : "Not Connected"}
             </Badge>
             <p className="text-xs text-muted-foreground mt-2">
               Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
@@ -172,10 +196,18 @@ const Dashboard = () => {
           {/* Control Panel */}
           <Card className="border-2">
             <CardHeader>
-              <CardTitle>Device Control Panel</CardTitle>
-              <CardDescription>
-                Manually control irrigation and ventilation systems
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Device Control Panel</CardTitle>
+                  <CardDescription>
+                    Control irrigation and ventilation via cloud commands
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="gap-1">
+                  <Cloud className="h-3 w-3" />
+                  Cloud Control
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-2 gap-6">
@@ -197,11 +229,12 @@ const Dashboard = () => {
                   </div>
                   <Button 
                     onClick={toggleIrrigation}
-                    variant={irrigationActive ? "destructive" : "hero"}
+                    variant={irrigationActive ? "destructive" : "default"}
                     className="w-full gap-2"
+                    disabled={sendingCommand}
                   >
                     <Power className="h-4 w-4" />
-                    {irrigationActive ? "Turn OFF" : "Turn ON"}
+                    {sendingCommand ? "Sending..." : irrigationActive ? "Turn OFF" : "Turn ON"}
                   </Button>
                 </div>
 
@@ -225,9 +258,10 @@ const Dashboard = () => {
                     onClick={toggleFan}
                     variant={fanActive ? "destructive" : "secondary"}
                     className="w-full gap-2"
+                    disabled={sendingCommand}
                   >
                     <Power className="h-4 w-4" />
-                    {fanActive ? "Turn OFF" : "Turn ON"}
+                    {sendingCommand ? "Sending..." : fanActive ? "Turn OFF" : "Turn ON"}
                   </Button>
                 </div>
               </div>
@@ -258,19 +292,19 @@ const Dashboard = () => {
               <div className="space-y-3 text-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">1.</span>
-                  <span>Install dependencies on your Raspberry Pi (see Documentation)</span>
+                  <span>Install dependencies: <code className="bg-muted px-2 py-1 rounded">pip install requests adafruit-circuitpython-dht</code></span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">2.</span>
-                  <span>Run Flask API server: <code className="bg-muted px-2 py-1 rounded">sudo python3 app.py</code></span>
+                  <span>Configure your USER_ID in the Pi script</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">3.</span>
-                  <span>Enter your Pi's IP address in System Configuration above</span>
+                  <span>Run the script: <code className="bg-muted px-2 py-1 rounded">python3 app.py</code></span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">4.</span>
-                  <span>Click "Test Connection" to verify setup</span>
+                  <span>Data syncs to cloud automatically every 5 seconds</span>
                 </div>
               </div>
             </CardContent>

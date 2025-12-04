@@ -53,6 +53,36 @@ export type Database = {
         }
         Relationships: []
       }
+      device_commands: {
+        Row: {
+          action: string
+          created_at: string
+          device: string
+          executed_at: string | null
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          device: string
+          executed_at?: string | null
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          device?: string
+          executed_at?: string | null
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       irrigation_logs: {
         Row: {
           action: string
