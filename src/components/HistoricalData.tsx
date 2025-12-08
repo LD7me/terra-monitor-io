@@ -1,22 +1,35 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { TrendingUp, Database } from "lucide-react";
+import { TrendingUp, Database, Download } from "lucide-react";
 import { useHistoricalData } from "@/hooks/useHistoricalData";
 
 export const HistoricalData = () => {
-  const { data } = useHistoricalData();
+  const { data, exportToCSV } = useHistoricalData();
 
   return (
     <Card className="border-2">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
             <CardTitle>Historical Trends</CardTitle>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Database className="h-4 w-4" />
-            {data.length} data points
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Database className="h-4 w-4" />
+              {data.length} data points
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={exportToCSV}
+              disabled={data.length === 0}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </Button>
           </div>
         </div>
         <CardDescription>

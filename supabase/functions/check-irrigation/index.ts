@@ -6,10 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface IrrigationCheckRequest {
+interface AutomationCheckRequest {
   userId: string;
   soilMoisture: string;
   temperature: number;
+  humidity: number;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -23,9 +24,9 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { userId, soilMoisture, temperature }: IrrigationCheckRequest = await req.json();
+    const { userId, soilMoisture, temperature, humidity }: AutomationCheckRequest = await req.json();
 
-    console.log("Checking irrigation needs:", { userId, soilMoisture, temperature });
+    console.log("Checking automation needs:", { userId, soilMoisture, temperature, humidity });
 
     // Get user's alert configuration
     const { data: config, error: configError } = await supabase
@@ -37,27 +38,39 @@ const handler = async (req: Request): Promise<Response> => {
     if (configError) {
       console.error("Error fetching config:", configError);
       return new Response(
-        JSON.stringify({ shouldIrrigate: false, reason: "No configuration found" }),
+        JSON.stringify({ shouldIrrigate: false, shouldFan: false, reason: "No configuration found" }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
 
-    // Simple threshold-based logic
+    // Irrigation logic
     let shouldIrrigate = false;
-    let reason = "";
+    let irrigationReason = "";
 
-    // Check if soil moisture is low (Dry condition)
     if (soilMoisture === "Dry") {
       shouldIrrigate = true;
-      reason = "Soil moisture is too low (Dry)";
-    } 
-    // Also irrigate if temperature is high and soil is not wet
-    else if (temperature > (config?.temp_max || 35) && soilMoisture !== "Wet") {
+      irrigationReason = "Soil moisture is too low (Dry)";
+    } else if (temperature > (config?.temp_max || 35) && soilMoisture !== "Wet") {
       shouldIrrigate = true;
-      reason = `High temperature (${temperature}°C) detected with non-optimal soil moisture`;
+      irrigationReason = `High temperature (${temperature}°C) detected with non-optimal soil moisture`;
     }
 
-    // Log the irrigation decision
+    // Fan control logic - turn on when temp OR humidity is too high
+    let shouldFan = false;
+    let fanReason = "";
+
+    const tempMax = config?.temp_max || 35;
+    const humidityMax = config?.humidity_max || 80;
+
+    if (temperature > tempMax) {
+      shouldFan = true;
+      fanReason = `Temperature (${temperature}°C) exceeds threshold (${tempMax}°C)`;
+    } else if (humidity > humidityMax) {
+      shouldFan = true;
+      fanReason = `Humidity (${humidity}%) exceeds threshold (${humidityMax}%)`;
+    }
+
+    // Log irrigation action
     if (shouldIrrigate) {
       await supabase.from('irrigation_logs').insert({
         user_id: userId,
@@ -65,14 +78,33 @@ const handler = async (req: Request): Promise<Response> => {
         trigger_type: 'threshold',
         soil_moisture: soilMoisture,
         temperature: temperature,
-        reason: reason,
+        reason: irrigationReason,
       });
+      console.log("Irrigation logged:", irrigationReason);
     }
 
-    console.log("Irrigation decision:", { shouldIrrigate, reason });
+    // Log fan action (if we want to track this)
+    if (shouldFan) {
+      await supabase.from('irrigation_logs').insert({
+        user_id: userId,
+        action: 'fan_auto',
+        trigger_type: 'threshold',
+        soil_moisture: soilMoisture,
+        temperature: temperature,
+        reason: fanReason,
+      });
+      console.log("Fan action logged:", fanReason);
+    }
+
+    console.log("Automation decision:", { shouldIrrigate, irrigationReason, shouldFan, fanReason });
 
     return new Response(
-      JSON.stringify({ shouldIrrigate, reason }),
+      JSON.stringify({ 
+        shouldIrrigate, 
+        irrigationReason,
+        shouldFan,
+        fanReason 
+      }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
