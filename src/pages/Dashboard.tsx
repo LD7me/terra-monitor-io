@@ -1,81 +1,16 @@
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import { SystemConfig } from "@/components/SystemConfig";
 import { AlertConfig } from "@/components/AlertConfig";
 import { HistoricalData } from "@/components/HistoricalData";
 import { WeatherWidget } from "@/components/WeatherWidget";
-import { Thermometer, Droplets, Sprout, Power, Fan, Cloud } from "lucide-react";
-import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { DeviceControlPanel } from "@/components/DeviceControlPanel";
+import { Thermometer, Droplets, Sprout } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
-import { supabase } from "@/integrations/supabase/client";
 
 const Dashboard = () => {
-  const { user } = useAuth();
   const { sensorData, isConnected } = useSensorData();
-  const [irrigationActive, setIrrigationActive] = useState(false);
-  const [fanActive, setFanActive] = useState(false);
-  const [sendingCommand, setSendingCommand] = useState(false);
-
-  const sendDeviceCommand = async (device: 'irrigation' | 'fan', action: 'on' | 'off') => {
-    if (!user?.id) {
-      toast.error("You must be logged in to control devices");
-      return;
-    }
-
-    setSendingCommand(true);
-    try {
-      const { error } = await supabase.from('device_commands').insert({
-        user_id: user.id,
-        device,
-        action,
-        status: 'pending'
-      });
-
-      if (error) throw error;
-
-      // Log irrigation actions
-      if (device === 'irrigation') {
-        await supabase.from('irrigation_logs').insert({
-          user_id: user.id,
-          action,
-          trigger_type: 'manual',
-          soil_moisture: sensorData.soilMoisture,
-          temperature: sensorData.temperature,
-          reason: 'Manual cloud control',
-        });
-      }
-
-      toast.success(`Command sent: ${device} ${action.toUpperCase()}`, {
-        description: "Waiting for Pi to execute..."
-      });
-
-      // Update local state optimistically
-      if (device === 'irrigation') {
-        setIrrigationActive(action === 'on');
-      } else {
-        setFanActive(action === 'on');
-      }
-    } catch (error) {
-      console.error('Failed to send command:', error);
-      toast.error("Failed to send command");
-    } finally {
-      setSendingCommand(false);
-    }
-  };
-
-  const toggleIrrigation = () => {
-    const action = irrigationActive ? 'off' : 'on';
-    sendDeviceCommand('irrigation', action);
-  };
-
-  const toggleFan = () => {
-    const action = fanActive ? 'off' : 'on';
-    sendDeviceCommand('fan', action);
-  };
 
   const getStatusColor = (value: number, min: number, max: number) => {
     if (value < min) return "text-secondary";
@@ -194,79 +129,7 @@ const Dashboard = () => {
           </div>
 
           {/* Control Panel */}
-          <Card className="border-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Device Control Panel</CardTitle>
-                  <CardDescription>
-                    Control irrigation and ventilation via cloud commands
-                  </CardDescription>
-                </div>
-                <Badge variant="outline" className="gap-1">
-                  <Cloud className="h-3 w-3" />
-                  Cloud Control
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Irrigation Control */}
-                <div className="p-6 rounded-lg border-2 border-border bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${irrigationActive ? 'bg-primary' : 'bg-muted'}`}>
-                        <Droplets className={`h-6 w-6 ${irrigationActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">Irrigation System</h3>
-                        <p className="text-sm text-muted-foreground">Water pump relay control</p>
-                      </div>
-                    </div>
-                    <Badge variant={irrigationActive ? "default" : "secondary"}>
-                      {irrigationActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
-                  <Button 
-                    onClick={toggleIrrigation}
-                    variant={irrigationActive ? "destructive" : "default"}
-                    className="w-full gap-2"
-                    disabled={sendingCommand}
-                  >
-                    <Power className="h-4 w-4" />
-                    {sendingCommand ? "Sending..." : irrigationActive ? "Turn OFF" : "Turn ON"}
-                  </Button>
-                </div>
-
-                {/* Fan Control */}
-                <div className="p-6 rounded-lg border-2 border-border bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${fanActive ? 'bg-secondary' : 'bg-muted'}`}>
-                        <Fan className={`h-6 w-6 ${fanActive ? 'text-secondary-foreground animate-spin' : 'text-muted-foreground'}`} />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">Ventilation Fan</h3>
-                        <p className="text-sm text-muted-foreground">Cooling system control</p>
-                      </div>
-                    </div>
-                    <Badge variant={fanActive ? "default" : "secondary"}>
-                      {fanActive ? "Running" : "Stopped"}
-                    </Badge>
-                  </div>
-                  <Button 
-                    onClick={toggleFan}
-                    variant={fanActive ? "destructive" : "secondary"}
-                    className="w-full gap-2"
-                    disabled={sendingCommand}
-                  >
-                    <Power className="h-4 w-4" />
-                    {sendingCommand ? "Sending..." : fanActive ? "Turn OFF" : "Turn ON"}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <DeviceControlPanel sensorData={sensorData} />
 
           {/* New Features Grid */}
           <div className="grid md:grid-cols-2 gap-6 mt-6">
