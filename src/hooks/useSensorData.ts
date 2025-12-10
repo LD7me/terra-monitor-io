@@ -7,6 +7,8 @@ interface SensorData {
   humidity: number;
   soilMoisture: "Wet" | "Dry";
   timestamp: string;
+  batteryPercentage: number | null;
+  batteryVoltage: number | null;
 }
 
 export function useSensorData() {
@@ -16,6 +18,8 @@ export function useSensorData() {
     humidity: 0,
     soilMoisture: "Dry",
     timestamp: new Date().toISOString(),
+    batteryPercentage: null,
+    batteryVoltage: null,
   });
   const [isConnected, setIsConnected] = useState(false);
 
@@ -38,6 +42,8 @@ export function useSensorData() {
           humidity: data.humidity,
           soilMoisture: data.soil_moisture as "Wet" | "Dry",
           timestamp: data.timestamp,
+          batteryPercentage: data.battery_percentage ?? null,
+          batteryVoltage: data.battery_voltage ?? null,
         });
         // Consider connected if we have recent data (within last 30 seconds)
         const lastUpdate = new Date(data.timestamp).getTime();
@@ -50,6 +56,8 @@ export function useSensorData() {
           humidity: data.humidity,
           soilMoisture: data.soil_moisture as "Wet" | "Dry",
           timestamp: data.timestamp,
+          batteryPercentage: data.battery_percentage ?? null,
+          batteryVoltage: data.battery_voltage ?? null,
         });
       }
     };
@@ -74,6 +82,8 @@ export function useSensorData() {
             humidity: newReading.humidity,
             soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
             timestamp: newReading.timestamp,
+            batteryPercentage: newReading.battery_percentage ?? null,
+            batteryVoltage: newReading.battery_voltage ?? null,
           });
           setIsConnected(true);
           
@@ -82,6 +92,8 @@ export function useSensorData() {
             humidity: newReading.humidity,
             soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
             timestamp: newReading.timestamp,
+            batteryPercentage: newReading.battery_percentage ?? null,
+            batteryVoltage: newReading.battery_voltage ?? null,
           });
         }
       )

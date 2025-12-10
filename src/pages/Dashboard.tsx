@@ -8,6 +8,7 @@ import { WeatherWidget } from "@/components/WeatherWidget";
 import { DeviceControlPanel } from "@/components/DeviceControlPanel";
 import { CommandHistory } from "@/components/CommandHistory";
 import { DailySummary } from "@/components/DailySummary";
+import { BatteryIndicator } from "@/components/BatteryIndicator";
 import { Thermometer, Droplets, Sprout } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
 
@@ -40,15 +41,24 @@ const Dashboard = () => {
           {/* System Configuration */}
           <SystemConfig />
 
-          {/* Connection Status */}
-          <div>
-            <Badge variant={isConnected ? "default" : "secondary"} className="gap-2 text-xs">
-              <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
-              {isConnected ? "Receiving Data" : "Not Connected"}
-            </Badge>
-            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-2">
-              Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
-            </p>
+          {/* Connection Status & Battery */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-start">
+            <div className="flex-1">
+              <Badge variant={isConnected ? "default" : "secondary"} className="gap-2 text-xs">
+                <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
+                {isConnected ? "Receiving Data" : "Not Connected"}
+              </Badge>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-2">
+                Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
+              </p>
+            </div>
+            <div className="w-full sm:w-64">
+              <BatteryIndicator 
+                percentage={sensorData.batteryPercentage}
+                voltage={sensorData.batteryVoltage}
+                isConnected={isConnected}
+              />
+            </div>
           </div>
 
           {/* Sensor Cards - Responsive Grid */}

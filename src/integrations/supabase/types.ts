@@ -142,6 +142,8 @@ export type Database = {
       }
       sensor_readings: {
         Row: {
+          battery_percentage: number | null
+          battery_voltage: number | null
           created_at: string
           humidity: number
           id: string
@@ -151,6 +153,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          battery_percentage?: number | null
+          battery_voltage?: number | null
           created_at?: string
           humidity: number
           id?: string
@@ -160,6 +164,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          battery_percentage?: number | null
+          battery_voltage?: number | null
           created_at?: string
           humidity?: number
           id?: string
