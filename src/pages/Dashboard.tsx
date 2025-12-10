@@ -24,37 +24,35 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <Navigation />
       
-      <div className="pt-24 pb-12 px-4">
-        <div className="container mx-auto max-w-7xl">
+      <div className="pt-20 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-4">
+        <div className="container mx-auto max-w-7xl space-y-6">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
-              <h1 className="text-3xl sm:text-4xl font-bold mb-2">Live Dashboard</h1>
-              <p className="text-muted-foreground text-sm sm:text-base">Real-time greenhouse environmental monitoring</p>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1 sm:mb-2">Live Dashboard</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm lg:text-base">Real-time greenhouse monitoring</p>
             </div>
-            <Badge variant={isConnected ? "default" : "secondary"} className="self-start sm:self-auto">
+            <Badge variant={isConnected ? "default" : "secondary"} className="self-start sm:self-auto text-xs">
               {isConnected ? "Connected" : "Simulated"}
             </Badge>
           </div>
 
           {/* System Configuration */}
-          <div className="mb-8">
-            <SystemConfig />
-          </div>
+          <SystemConfig />
 
           {/* Connection Status */}
-          <div className="mb-6">
-            <Badge variant={isConnected ? "default" : "secondary"} className="gap-2">
+          <div>
+            <Badge variant={isConnected ? "default" : "secondary"} className="gap-2 text-xs">
               <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
-              {isConnected ? "Receiving Data from Cloud" : "Not Connected"}
+              {isConnected ? "Receiving Data" : "Not Connected"}
             </Badge>
-            <p className="text-xs text-muted-foreground mt-2">
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-2">
               Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
             </p>
           </div>
 
           {/* Sensor Cards - Responsive Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
             {/* Temperature Card */}
             <Card className="border-2 hover:shadow-lg transition-all">
               <CardHeader className="pb-2">
@@ -129,13 +127,13 @@ const Dashboard = () => {
           </div>
 
           {/* Control Panel & Daily Summary */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <DeviceControlPanel sensorData={sensorData} />
             <DailySummary />
           </div>
 
           {/* Alerts, Weather, Command History */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             <AlertConfig 
               currentTemp={sensorData.temperature}
               currentHumidity={sensorData.humidity}
@@ -146,9 +144,7 @@ const Dashboard = () => {
           </div>
 
           {/* Historical Data */}
-          <div className="mb-6">
-            <HistoricalData />
-          </div>
+          <HistoricalData />
 
           {/* Setup Instructions */}
           <Card className="border-2 bg-primary/5">

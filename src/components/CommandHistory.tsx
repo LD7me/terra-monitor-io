@@ -97,26 +97,26 @@ export const CommandHistory = () => {
             No commands sent yet
           </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3 max-h-64 overflow-y-auto">
             {commands.map((cmd) => (
               <div
                 key={cmd.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-2 sm:p-3 rounded-lg bg-muted/50 gap-2"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                   {getDeviceIcon(cmd.device)}
-                  <div>
-                    <p className="font-medium capitalize text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium capitalize text-xs sm:text-sm truncate">
                       {cmd.device} - {cmd.action.toUpperCase()}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">
                       {formatTime(cmd.created_at)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                   {getStatusIcon(cmd.status)}
-                  <Badge variant={cmd.status === 'executed' ? 'default' : 'secondary'}>
+                  <Badge variant={cmd.status === 'executed' ? 'default' : 'secondary'} className="text-[10px] sm:text-xs">
                     {cmd.status}
                   </Badge>
                 </div>

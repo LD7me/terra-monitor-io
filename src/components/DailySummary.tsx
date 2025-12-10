@@ -70,37 +70,37 @@ export const DailySummary = () => {
         <CardDescription>Daily statistics overview</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Thermometer className="h-4 w-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Avg Temp</span>
+        <div className="grid grid-cols-2 gap-2 sm:gap-4">
+          <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1">
+              <Thermometer className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Avg Temp</span>
             </div>
-            <p className="text-2xl font-bold">{stats.avgTemp}°C</p>
+            <p className="text-xl sm:text-2xl font-bold">{stats.avgTemp}°C</p>
           </div>
 
-          <div className="p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Droplets className="h-4 w-4 text-secondary" />
-              <span className="text-xs text-muted-foreground">Avg Humidity</span>
+          <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1">
+              <Droplets className="h-3 w-3 sm:h-4 sm:w-4 text-secondary" />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Avg Humidity</span>
             </div>
-            <p className="text-2xl font-bold">{stats.avgHumidity}%</p>
+            <p className="text-xl sm:text-2xl font-bold">{stats.avgHumidity}%</p>
           </div>
 
-          <div className="p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Sprout className="h-4 w-4 text-accent" />
-              <span className="text-xs text-muted-foreground">Irrigations</span>
+          <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1">
+              <Sprout className="h-3 w-3 sm:h-4 sm:w-4 text-accent" />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Irrigations</span>
             </div>
-            <p className="text-2xl font-bold">{stats.irrigationCycles}</p>
+            <p className="text-xl sm:text-2xl font-bold">{stats.irrigationCycles}</p>
           </div>
 
-          <div className="p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 mb-1">
-              <Bell className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Readings</span>
+          <div className="p-2 sm:p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center gap-1 sm:gap-2 mb-1">
+              <Bell className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Readings</span>
             </div>
-            <p className="text-2xl font-bold">{stats.totalReadings}</p>
+            <p className="text-xl sm:text-2xl font-bold">{stats.totalReadings}</p>
           </div>
         </div>
       </CardContent>
