@@ -8,6 +8,10 @@ interface AlertThresholds {
   tempMax: number;
   humidityMin: number;
   humidityMax: number;
+  soilMoistureMin: number;
+  soilMoistureMax: number;
+  batteryLowThreshold: number;
+  sensorOfflineMinutes: number;
   emailAlerts: boolean;
   emailAddress: string;
 }
@@ -19,6 +23,10 @@ export function useAlertConfig() {
     tempMax: 35,
     humidityMin: 40,
     humidityMax: 80,
+    soilMoistureMin: 30,
+    soilMoistureMax: 70,
+    batteryLowThreshold: 20,
+    sensorOfflineMinutes: 10,
     emailAlerts: false,
     emailAddress: '',
   });
@@ -39,6 +47,10 @@ export function useAlertConfig() {
           tempMax: data.temp_max,
           humidityMin: data.humidity_min,
           humidityMax: data.humidity_max,
+          soilMoistureMin: data.soil_moisture_min ?? 30,
+          soilMoistureMax: data.soil_moisture_max ?? 70,
+          batteryLowThreshold: data.battery_low_threshold ?? 20,
+          sensorOfflineMinutes: data.sensor_offline_minutes ?? 10,
           emailAlerts: data.email_alerts,
           emailAddress: data.email_address || '',
         });
@@ -50,6 +62,10 @@ export function useAlertConfig() {
           temp_max: 35,
           humidity_min: 40,
           humidity_max: 80,
+          soil_moisture_min: 30,
+          soil_moisture_max: 70,
+          battery_low_threshold: 20,
+          sensor_offline_minutes: 10,
           email_alerts: false,
         });
       }
@@ -69,6 +85,10 @@ export function useAlertConfig() {
         temp_max: newThresholds.tempMax,
         humidity_min: newThresholds.humidityMin,
         humidity_max: newThresholds.humidityMax,
+        soil_moisture_min: newThresholds.soilMoistureMin,
+        soil_moisture_max: newThresholds.soilMoistureMax,
+        battery_low_threshold: newThresholds.batteryLowThreshold,
+        sensor_offline_minutes: newThresholds.sensorOfflineMinutes,
         email_alerts: newThresholds.emailAlerts,
         email_address: newThresholds.emailAddress,
       });

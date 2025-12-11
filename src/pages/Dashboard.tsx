@@ -1,19 +1,26 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
 import { SystemConfig } from "@/components/SystemConfig";
-import { AlertConfig } from "@/components/AlertConfig";
 import { HistoricalData } from "@/components/HistoricalData";
 import { WeatherWidget } from "@/components/WeatherWidget";
 import { DeviceControlPanel } from "@/components/DeviceControlPanel";
 import { CommandHistory } from "@/components/CommandHistory";
 import { DailySummary } from "@/components/DailySummary";
-import { BatteryIndicator } from "@/components/BatteryIndicator";
-import { Thermometer, Droplets, Sprout } from "lucide-react";
+import { DeviceHealth } from "@/components/DeviceHealth";
+import { SoilMoistureCard } from "@/components/SoilMoistureCard";
+import { SoilMoistureHistory } from "@/components/SoilMoistureHistory";
+import { EnhancedAlerts } from "@/components/EnhancedAlerts";
+import { AlertConfigDialog } from "@/components/AlertConfigDialog";
+import { Thermometer, Droplets } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
+import { useAlertConfig } from "@/hooks/useAlertConfig";
 
 const Dashboard = () => {
   const { sensorData, isConnected } = useSensorData();
+  const { thresholds, saveThresholds } = useAlertConfig();
+  const [showConfigDialog, setShowConfigDialog] = useState(false);
 
   const getStatusColor = (value: number, min: number, max: number) => {
     if (value < min) return "text-secondary";
@@ -41,23 +48,23 @@ const Dashboard = () => {
           {/* System Configuration */}
           <SystemConfig />
 
-          {/* Connection Status & Battery */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-start">
-            <div className="flex-1">
-              <Badge variant={isConnected ? "default" : "secondary"} className="gap-2 text-xs">
+          {/* Device Health */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <DeviceHealth 
+              batteryPercentage={sensorData.batteryPercentage}
+              batteryVoltage={sensorData.batteryVoltage}
+              wifiSignalStrength={sensorData.wifiSignalStrength}
+              lastUpdate={sensorData.timestamp}
+              isConnected={isConnected}
+            />
+            <div className="flex flex-col gap-2">
+              <Badge variant={isConnected ? "default" : "secondary"} className="gap-2 text-xs self-start">
                 <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-primary-foreground animate-pulse' : 'bg-muted-foreground'}`} />
                 {isConnected ? "Receiving Data" : "Not Connected"}
               </Badge>
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 sm:mt-2">
-                Last updated: {new Date(sensorData.timestamp).toLocaleTimeString()}
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                Last updated: {new Date(sensorData.timestamp).toLocaleString()}
               </p>
-            </div>
-            <div className="w-full sm:w-64">
-              <BatteryIndicator 
-                percentage={sensorData.batteryPercentage}
-                voltage={sensorData.batteryVoltage}
-                isConnected={isConnected}
-              />
             </div>
           </div>
 
@@ -75,14 +82,14 @@ const Dashboard = () => {
                 <CardDescription className="text-xs sm:text-sm">DHT22 Sensor Reading</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.temperature, 20, 28)}`}>
+                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.temperature, thresholds.tempMin, thresholds.tempMax)}`}>
                   {sensorData.temperature}°C
                 </div>
                 <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
-                  <Badge variant={sensorData.temperature >= 20 && sensorData.temperature <= 28 ? "default" : "destructive"}>
-                    {sensorData.temperature >= 20 && sensorData.temperature <= 28 ? "Optimal" : "Alert"}
+                  <Badge variant={sensorData.temperature >= thresholds.tempMin && sensorData.temperature <= thresholds.tempMax ? "default" : "destructive"}>
+                    {sensorData.temperature >= thresholds.tempMin && sensorData.temperature <= thresholds.tempMax ? "Optimal" : "Alert"}
                   </Badge>
-                  <span className="text-muted-foreground">Range: 20-28°C</span>
+                  <span className="text-muted-foreground">Range: {thresholds.tempMin}-{thresholds.tempMax}°C</span>
                 </div>
               </CardContent>
             </Card>
@@ -99,42 +106,37 @@ const Dashboard = () => {
                 <CardDescription className="text-xs sm:text-sm">Relative Humidity</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.humidity, 60, 80)}`}>
+                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.humidity, thresholds.humidityMin, thresholds.humidityMax)}`}>
                   {sensorData.humidity}%
                 </div>
                 <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
-                  <Badge variant={sensorData.humidity >= 60 && sensorData.humidity <= 80 ? "default" : "destructive"}>
-                    {sensorData.humidity >= 60 && sensorData.humidity <= 80 ? "Optimal" : "Alert"}
+                  <Badge variant={sensorData.humidity >= thresholds.humidityMin && sensorData.humidity <= thresholds.humidityMax ? "default" : "destructive"}>
+                    {sensorData.humidity >= thresholds.humidityMin && sensorData.humidity <= thresholds.humidityMax ? "Optimal" : "Alert"}
                   </Badge>
-                  <span className="text-muted-foreground">Range: 60-80%</span>
+                  <span className="text-muted-foreground">Range: {thresholds.humidityMin}-{thresholds.humidityMax}%</span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Soil Moisture Card */}
-            <Card className="border-2 hover:shadow-lg transition-all sm:col-span-2 lg:col-span-1">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base sm:text-lg">Soil Moisture</CardTitle>
-                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                    <Sprout className="h-4 w-4 sm:h-5 sm:w-5 text-accent" />
-                  </div>
-                </div>
-                <CardDescription className="text-xs sm:text-sm">Digital Sensor</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${sensorData.soilMoisture === "Wet" ? "text-primary" : "text-destructive"}`}>
-                  {sensorData.soilMoisture}
-                </div>
-                <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
-                  <Badge variant={sensorData.soilMoisture === "Wet" ? "default" : "destructive"}>
-                    {sensorData.soilMoisture === "Wet" ? "Healthy" : "Needs Water"}
-                  </Badge>
-                  <span className="text-muted-foreground">Auto-irrigation ready</span>
-                </div>
-              </CardContent>
-            </Card>
+            <SoilMoistureCard 
+              soilMoisture={sensorData.soilMoisture}
+              soilMoisturePercentage={sensorData.soilMoisturePercentage}
+              lastUpdate={sensorData.timestamp}
+              thresholds={{
+                min: thresholds.soilMoistureMin,
+                max: thresholds.soilMoistureMax,
+              }}
+            />
           </div>
+
+          {/* Soil Moisture History */}
+          <SoilMoistureHistory 
+            thresholds={{
+              min: thresholds.soilMoistureMin,
+              max: thresholds.soilMoistureMax,
+            }}
+          />
 
           {/* Control Panel & Daily Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -144,10 +146,16 @@ const Dashboard = () => {
 
           {/* Alerts, Weather, Command History */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            <AlertConfig 
+            <EnhancedAlerts 
               currentTemp={sensorData.temperature}
               currentHumidity={sensorData.humidity}
               soilMoisture={sensorData.soilMoisture}
+              soilMoisturePercentage={sensorData.soilMoisturePercentage}
+              batteryPercentage={sensorData.batteryPercentage}
+              isConnected={isConnected}
+              lastUpdate={sensorData.timestamp}
+              thresholds={thresholds}
+              onConfigureClick={() => setShowConfigDialog(true)}
             />
             <WeatherWidget />
             <CommandHistory />
@@ -184,6 +192,14 @@ const Dashboard = () => {
           </Card>
         </div>
       </div>
+
+      {/* Alert Config Dialog */}
+      <AlertConfigDialog 
+        open={showConfigDialog}
+        onOpenChange={setShowConfigDialog}
+        thresholds={thresholds}
+        onSave={saveThresholds}
+      />
     </div>
   );
 };

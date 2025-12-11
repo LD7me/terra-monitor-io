@@ -16,36 +16,48 @@ export type Database = {
     Tables: {
       alert_configurations: {
         Row: {
+          battery_low_threshold: number | null
           created_at: string
           email_address: string | null
           email_alerts: boolean
           humidity_max: number
           humidity_min: number
           id: string
+          sensor_offline_minutes: number | null
+          soil_moisture_max: number | null
+          soil_moisture_min: number | null
           temp_max: number
           temp_min: number
           updated_at: string
           user_id: string
         }
         Insert: {
+          battery_low_threshold?: number | null
           created_at?: string
           email_address?: string | null
           email_alerts?: boolean
           humidity_max?: number
           humidity_min?: number
           id?: string
+          sensor_offline_minutes?: number | null
+          soil_moisture_max?: number | null
+          soil_moisture_min?: number | null
           temp_max?: number
           temp_min?: number
           updated_at?: string
           user_id: string
         }
         Update: {
+          battery_low_threshold?: number | null
           created_at?: string
           email_address?: string | null
           email_alerts?: boolean
           humidity_max?: number
           humidity_min?: number
           id?: string
+          sensor_offline_minutes?: number | null
+          soil_moisture_max?: number | null
+          soil_moisture_min?: number | null
           temp_max?: number
           temp_min?: number
           updated_at?: string
@@ -148,9 +160,11 @@ export type Database = {
           humidity: number
           id: string
           soil_moisture: string
+          soil_moisture_percentage: number | null
           temperature: number
           timestamp: string
           user_id: string
+          wifi_signal_strength: number | null
         }
         Insert: {
           battery_percentage?: number | null
@@ -159,9 +173,11 @@ export type Database = {
           humidity: number
           id?: string
           soil_moisture: string
+          soil_moisture_percentage?: number | null
           temperature: number
           timestamp?: string
           user_id: string
+          wifi_signal_strength?: number | null
         }
         Update: {
           battery_percentage?: number | null
@@ -170,9 +186,11 @@ export type Database = {
           humidity?: number
           id?: string
           soil_moisture?: string
+          soil_moisture_percentage?: number | null
           temperature?: number
           timestamp?: string
           user_id?: string
+          wifi_signal_strength?: number | null
         }
         Relationships: []
       }
