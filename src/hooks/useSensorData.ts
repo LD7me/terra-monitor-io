@@ -5,10 +5,12 @@ import { useAuth } from '@/contexts/AuthContext';
 interface SensorData {
   temperature: number;
   humidity: number;
-  soilMoisture: "Wet" | "Dry";
+  soilMoisture: string;
+  soilMoisturePercentage: number | null;
   timestamp: string;
   batteryPercentage: number | null;
   batteryVoltage: number | null;
+  wifiSignalStrength: number | null;
 }
 
 export function useSensorData() {
@@ -16,18 +18,20 @@ export function useSensorData() {
   const [sensorData, setSensorData] = useState<SensorData>({
     temperature: 0,
     humidity: 0,
-    soilMoisture: "Dry",
+    soilMoisture: 'Unknown',
+    soilMoisturePercentage: null,
     timestamp: new Date().toISOString(),
     batteryPercentage: null,
     batteryVoltage: null,
+    wifiSignalStrength: null,
   });
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
-    // Fetch latest reading from database
-    const fetchLatest = async () => {
+    // Fetch initial data
+    const fetchLatestReading = async () => {
       const { data, error } = await supabase
         .from('sensor_readings')
         .select('*')
@@ -37,32 +41,29 @@ export function useSensorData() {
         .maybeSingle();
 
       if (data && !error) {
-        setSensorData({
+        const newData = {
           temperature: data.temperature,
           humidity: data.humidity,
-          soilMoisture: data.soil_moisture as "Wet" | "Dry",
+          soilMoisture: data.soil_moisture,
+          soilMoisturePercentage: data.soil_moisture_percentage,
           timestamp: data.timestamp,
-          batteryPercentage: data.battery_percentage ?? null,
-          batteryVoltage: data.battery_voltage ?? null,
-        });
-        // Consider connected if we have recent data (within last 30 seconds)
+          batteryPercentage: data.battery_percentage,
+          batteryVoltage: data.battery_voltage,
+          wifiSignalStrength: data.wifi_signal_strength,
+        };
+        setSensorData(newData);
+        
+        // Check if data is recent (within last 30 seconds)
         const lastUpdate = new Date(data.timestamp).getTime();
         const now = Date.now();
         setIsConnected(now - lastUpdate < 30000);
         
-        // Check alerts
-        await checkAlertsAndIrrigation({
-          temperature: data.temperature,
-          humidity: data.humidity,
-          soilMoisture: data.soil_moisture as "Wet" | "Dry",
-          timestamp: data.timestamp,
-          batteryPercentage: data.battery_percentage ?? null,
-          batteryVoltage: data.battery_voltage ?? null,
-        });
+        // Check alerts and irrigation
+        checkAlertsAndIrrigation(newData);
       }
     };
 
-    fetchLatest();
+    fetchLatestReading();
 
     // Subscribe to realtime updates
     const channel = supabase
@@ -76,31 +77,26 @@ export function useSensorData() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          const newReading = payload.new as any;
-          setSensorData({
-            temperature: newReading.temperature,
-            humidity: newReading.humidity,
-            soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
-            timestamp: newReading.timestamp,
-            batteryPercentage: newReading.battery_percentage ?? null,
-            batteryVoltage: newReading.battery_voltage ?? null,
-          });
+          const newData = payload.new as any;
+          const formattedData = {
+            temperature: newData.temperature,
+            humidity: newData.humidity,
+            soilMoisture: newData.soil_moisture,
+            soilMoisturePercentage: newData.soil_moisture_percentage,
+            timestamp: newData.timestamp,
+            batteryPercentage: newData.battery_percentage,
+            batteryVoltage: newData.battery_voltage,
+            wifiSignalStrength: newData.wifi_signal_strength,
+          };
+          setSensorData(formattedData);
           setIsConnected(true);
-          
-          checkAlertsAndIrrigation({
-            temperature: newReading.temperature,
-            humidity: newReading.humidity,
-            soilMoisture: newReading.soil_moisture as "Wet" | "Dry",
-            timestamp: newReading.timestamp,
-            batteryPercentage: newReading.battery_percentage ?? null,
-            batteryVoltage: newReading.battery_voltage ?? null,
-          });
+          checkAlertsAndIrrigation(formattedData);
         }
       )
       .subscribe();
 
     // Poll every 10 seconds as backup
-    const interval = setInterval(fetchLatest, 10000);
+    const interval = setInterval(fetchLatestReading, 10000);
 
     return () => {
       supabase.removeChannel(channel);

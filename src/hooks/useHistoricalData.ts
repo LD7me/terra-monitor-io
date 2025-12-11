@@ -14,6 +14,7 @@ interface RawReading {
   humidity: number;
   timestamp: string;
   soil_moisture: string;
+  soil_moisture_percentage: number | null;
 }
 
 export function useHistoricalData() {
@@ -27,7 +28,7 @@ export function useHistoricalData() {
     const loadData = async () => {
       const { data: readings, error } = await supabase
         .from('sensor_readings')
-        .select('temperature, humidity, timestamp, soil_moisture')
+        .select('temperature, humidity, timestamp, soil_moisture, soil_moisture_percentage')
         .eq('user_id', user.id)
         .order('timestamp', { ascending: false })
         .limit(50);
