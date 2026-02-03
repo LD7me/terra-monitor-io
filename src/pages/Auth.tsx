@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Leaf } from 'lucide-react';
 import { z } from 'zod';
+import AuthDiagnostics from '@/components/AuthDiagnostics';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -105,7 +106,8 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
+      <Card>
         <CardHeader className="space-y-1 flex flex-col items-center">
           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
             <Leaf className="w-6 h-6 text-primary" />
@@ -207,6 +209,9 @@ export default function Auth() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <AuthDiagnostics />
+      </div>
     </div>
   );
 }

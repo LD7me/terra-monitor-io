@@ -104,31 +104,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string) => {
     const redirectUrl = `${window.location.origin}/dashboard`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
-    return { error };
+      });
+      return { error };
+    } catch (e: any) {
+      // Most common in-browser failure for auth is a fetch/network/CORS error.
+      return {
+        error: {
+          message:
+            e?.message?.includes('Failed to fetch')
+              ? 'Network error while contacting the authentication service ("Failed to fetch"). This is usually caused by blocked cross-origin requests, browser privacy settings, or an environment URL mismatch.'
+              : e?.message ?? 'Unexpected authentication error.',
+        },
+      };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    if (!error) {
-      navigate('/dashboard');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (!error) {
+        navigate('/dashboard');
+      }
+
+      return { error };
+    } catch (e: any) {
+      return {
+        error: {
+          message:
+            e?.message?.includes('Failed to fetch')
+              ? 'Network error while contacting the authentication service ("Failed to fetch"). This is usually caused by blocked cross-origin requests, browser privacy settings, or an environment URL mismatch.'
+              : e?.message ?? 'Unexpected authentication error.',
+        },
+      };
     }
-    
-    return { error };
   };
 
   const signOut = async () => {
