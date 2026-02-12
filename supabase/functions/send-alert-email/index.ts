@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +7,6 @@ const corsHeaders = {
 };
 
 interface AlertEmailRequest {
-  email: string;
   alertType: string;
   value: number;
   threshold: number;
@@ -20,7 +19,54 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, alertType, value, threshold, timestamp }: AlertEmailRequest = await req.json();
+    // Authenticate the caller
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+
+    const { alertType, value, threshold, timestamp }: AlertEmailRequest = await req.json();
+
+    // Fetch the user's alert config to get their verified email
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: config } = await serviceClient
+      .from('alert_configurations')
+      .select('email_address, email_alerts')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!config?.email_address || !config?.email_alerts) {
+      return new Response(JSON.stringify({ error: 'Email alerts not configured for this user' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const email = config.email_address;
 
     console.log("Sending alert email:", { email, alertType, value, threshold });
 
@@ -71,7 +117,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in send-alert-email function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },

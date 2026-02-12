@@ -7,7 +7,6 @@ const corsHeaders = {
 };
 
 interface AutomationCheckRequest {
-  userId: string;
   soilMoisture: string;
   temperature: number;
   humidity: number;
@@ -19,17 +18,43 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const supabase = createClient(
+    // Authenticate the caller
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const authClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { userId, soilMoisture, temperature, humidity }: AutomationCheckRequest = await req.json();
+    const { soilMoisture, temperature, humidity }: AutomationCheckRequest = await req.json();
 
     console.log("Checking automation needs:", { userId, soilMoisture, temperature, humidity });
 
     // Get user's alert configuration
-    const { data: config, error: configError } = await supabase
+    const { data: config, error: configError } = await serviceClient
       .from('alert_configurations')
       .select('*')
       .eq('user_id', userId)
@@ -55,7 +80,7 @@ const handler = async (req: Request): Promise<Response> => {
       irrigationReason = `High temperature (${temperature}°C) detected with non-optimal soil moisture`;
     }
 
-    // Fan control logic - turn on when temp OR humidity is too high
+    // Fan control logic
     let shouldFan = false;
     let fanReason = "";
 
@@ -72,7 +97,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Log irrigation action
     if (shouldIrrigate) {
-      await supabase.from('irrigation_logs').insert({
+      await serviceClient.from('irrigation_logs').insert({
         user_id: userId,
         action: 'auto',
         trigger_type: 'threshold',
@@ -83,9 +108,9 @@ const handler = async (req: Request): Promise<Response> => {
       console.log("Irrigation logged:", irrigationReason);
     }
 
-    // Log fan action (if we want to track this)
+    // Log fan action
     if (shouldFan) {
-      await supabase.from('irrigation_logs').insert({
+      await serviceClient.from('irrigation_logs').insert({
         user_id: userId,
         action: 'fan_auto',
         trigger_type: 'threshold',
@@ -113,7 +138,7 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error("Error in check-irrigation function:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },

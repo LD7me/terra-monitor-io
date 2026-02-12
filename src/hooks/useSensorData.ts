@@ -137,7 +137,6 @@ export function useSensorData() {
       for (const alert of alerts) {
         await supabase.functions.invoke('send-alert-email', {
           body: {
-            email: config.email_address,
             alertType: alert.type,
             value: alert.value,
             threshold: alert.threshold,
@@ -150,9 +149,9 @@ export function useSensorData() {
     // Check automated irrigation
     const { data: irrigationCheck } = await supabase.functions.invoke('check-irrigation', {
       body: {
-        userId: user.id,
         soilMoisture: data.soilMoisture,
         temperature: data.temperature,
+        humidity: data.humidity,
       },
     });
 
