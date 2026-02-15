@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Leaf } from 'lucide-react';
+import { Leaf, Loader2 } from 'lucide-react';
 import { z } from 'zod';
-import AuthDiagnostics from '@/components/AuthDiagnostics';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -35,11 +33,27 @@ export default function Auth() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // If running inside the editor preview domain, some backend auth setups will block
-  // cross-origin requests, causing a browser-level "Failed to fetch".
   const isEditorOrigin = typeof window !== 'undefined' && window.location.hostname.endsWith('lovableproject.com');
   const previewAuthUrl = 'https://id-preview--97c25c50-7c76-4f40-9037-3acf3afdfbd3.lovable.app/auth';
-  const publishedAuthUrl = 'https://terra-monitor-io.lovable.app/auth';
+
+  useEffect(() => {
+    if (isEditorOrigin) {
+      window.location.href = previewAuthUrl;
+    }
+  }, [isEditorOrigin]);
+
+  if (isEditorOrigin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col items-center gap-3 pt-6">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Redirecting to login...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,27 +128,6 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
       <div className="w-full max-w-md space-y-4">
-        {isEditorOrigin && (
-          <Alert>
-            <AlertTitle>Login blocked in editor preview</AlertTitle>
-            <AlertDescription>
-              This page is opened on <span className="font-mono">lovableproject.com</span>, which can be blocked by backend auth CORS rules and results in <span className="font-mono">Failed to fetch</span>.
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button asChild variant="hero" size="sm">
-                  <a href={previewAuthUrl} target="_blank" rel="noreferrer">
-                    Open working preview login
-                  </a>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <a href={publishedAuthUrl} target="_blank" rel="noreferrer">
-                    Open published login
-                  </a>
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
       <Card>
         <CardHeader className="space-y-1 flex flex-col items-center">
           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
@@ -238,7 +231,6 @@ export default function Auth() {
         </CardContent>
       </Card>
 
-      <AuthDiagnostics />
       </div>
     </div>
   );
