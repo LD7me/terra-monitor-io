@@ -23,6 +23,8 @@ export type Database = {
           humidity_max: number
           humidity_min: number
           id: string
+          light_max: number | null
+          light_min: number | null
           sensor_offline_minutes: number | null
           soil_moisture_max: number | null
           soil_moisture_min: number | null
@@ -39,6 +41,8 @@ export type Database = {
           humidity_max?: number
           humidity_min?: number
           id?: string
+          light_max?: number | null
+          light_min?: number | null
           sensor_offline_minutes?: number | null
           soil_moisture_max?: number | null
           soil_moisture_min?: number | null
@@ -55,6 +59,8 @@ export type Database = {
           humidity_max?: number
           humidity_min?: number
           id?: string
+          light_max?: number | null
+          light_min?: number | null
           sensor_offline_minutes?: number | null
           soil_moisture_max?: number | null
           soil_moisture_min?: number | null
@@ -186,6 +192,7 @@ export type Database = {
           created_at: string
           humidity: number
           id: string
+          light_intensity: number | null
           soil_moisture: string
           soil_moisture_percentage: number | null
           temperature: number
@@ -199,6 +206,7 @@ export type Database = {
           created_at?: string
           humidity: number
           id?: string
+          light_intensity?: number | null
           soil_moisture: string
           soil_moisture_percentage?: number | null
           temperature: number
@@ -212,6 +220,7 @@ export type Database = {
           created_at?: string
           humidity?: number
           id?: string
+          light_intensity?: number | null
           soil_moisture?: string
           soil_moisture_percentage?: number | null
           temperature?: number

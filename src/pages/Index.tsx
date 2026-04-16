@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
-import { Thermometer, Droplets, Sprout, Activity, BookOpen, Zap, Download } from "lucide-react";
+import { Thermometer, Droplets, Sprout, Activity, BookOpen, Zap, Download, Sun } from "lucide-react";
 import { downloadSetupFiles } from "@/lib/downloadSetup";
 import { toast } from "sonner";
 
@@ -25,7 +25,7 @@ const Index = () => {
           
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Real-time environmental monitoring and automated control system for your greenhouse. 
-            Track temperature, humidity, and soil moisture with Raspberry Pi IoT technology.
+            Arduino Uno sensors + Raspberry Pi controller with cloud-connected dashboard.
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center">
@@ -63,21 +63,21 @@ const Index = () => {
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-3xl font-bold text-center mb-12">System Features</h2>
           
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-lg">
               <CardHeader>
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <Thermometer className="h-6 w-6 text-primary" />
                 </div>
-                <CardTitle>Temperature Monitoring</CardTitle>
+                <CardTitle>Temperature & Humidity</CardTitle>
                 <CardDescription>
-                  DHT22 sensor provides accurate temperature readings with ±0.5°C precision
+                  DHT11 sensor on Arduino provides temperature and humidity readings
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Real-time temperature tracking</li>
-                  <li>• Historical data visualization</li>
+                  <li>• Real-time tracking</li>
+                  <li>• Historical data</li>
                   <li>• Automatic alerts</li>
                 </ul>
               </CardContent>
@@ -86,18 +86,18 @@ const Index = () => {
             <Card className="border-2 hover:border-secondary/50 transition-all duration-300 hover:shadow-lg">
               <CardHeader>
                 <div className="h-12 w-12 rounded-lg bg-secondary/10 flex items-center justify-center mb-4">
-                  <Droplets className="h-6 w-6 text-secondary" />
+                  <Sun className="h-6 w-6 text-secondary" />
                 </div>
-                <CardTitle>Humidity Control</CardTitle>
+                <CardTitle>Light Detection</CardTitle>
                 <CardDescription>
-                  Monitor and maintain optimal humidity levels for plant growth
+                  Light sensor on Arduino monitors intensity levels for optimal growth
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Relative humidity sensing</li>
-                  <li>• Automated fan control</li>
-                  <li>• Threshold notifications</li>
+                  <li>• Light intensity sensing</li>
+                  <li>• Threshold alerts</li>
+                  <li>• Trend analysis</li>
                 </ul>
               </CardContent>
             </Card>
@@ -109,7 +109,7 @@ const Index = () => {
                 </div>
                 <CardTitle>Soil Moisture</CardTitle>
                 <CardDescription>
-                  Automatic irrigation based on soil moisture levels
+                  Digital soil moisture detection via Arduino for irrigation decisions
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -117,6 +117,25 @@ const Index = () => {
                   <li>• Digital moisture detection</li>
                   <li>• Relay-controlled irrigation</li>
                   <li>• Water conservation</li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-lg">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  <Droplets className="h-6 w-6 text-primary" />
+                </div>
+                <CardTitle>Smart Control</CardTitle>
+                <CardDescription>
+                  Raspberry Pi processes data and controls irrigation & cooling fans via relay
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li>• Automated irrigation</li>
+                  <li>• Cooling fan control</li>
+                  <li>• Cloud commands</li>
                 </ul>
               </CardContent>
             </Card>
@@ -138,19 +157,19 @@ const Index = () => {
               <ul className="space-y-3 text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>
-                  <span><strong>Raspberry Pi</strong> - Main controller running Python scripts</span>
+                  <span><strong>Arduino Uno</strong> - Sensor data acquisition unit (DHT11, Light, Soil)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>
-                  <span><strong>DHT22 Sensor</strong> - Temperature & humidity monitoring</span>
+                  <span><strong>Raspberry Pi</strong> - Main controller, processes data & controls actuators</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>
-                  <span><strong>Soil Moisture Sensor</strong> - Digital moisture detection</span>
+                  <span><strong>Serial USB</strong> - Arduino → Pi communication</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>
-                  <span><strong>Relay Module</strong> - Device control (irrigation, fans)</span>
+                  <span><strong>Relay Module</strong> - Controls irrigation pump & cooling fans</span>
                 </li>
               </ul>
             </div>

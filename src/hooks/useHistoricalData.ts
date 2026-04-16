@@ -6,6 +6,7 @@ interface DataPoint {
   timestamp: string;
   temperature: number;
   humidity: number;
+  light_intensity?: number | null;
   soil_moisture?: string;
 }
 
@@ -15,6 +16,7 @@ interface RawReading {
   timestamp: string;
   soil_moisture: string;
   soil_moisture_percentage: number | null;
+  light_intensity: number | null;
 }
 
 export function useHistoricalData() {
@@ -28,7 +30,7 @@ export function useHistoricalData() {
     const loadData = async () => {
       const { data: readings, error } = await supabase
         .from('sensor_readings')
-        .select('temperature, humidity, timestamp, soil_moisture, soil_moisture_percentage')
+        .select('temperature, humidity, timestamp, soil_moisture, soil_moisture_percentage, light_intensity')
         .eq('user_id', user.id)
         .order('timestamp', { ascending: false })
         .limit(50);
@@ -41,6 +43,7 @@ export function useHistoricalData() {
           timestamp: new Date(reading.timestamp).toLocaleTimeString(),
           temperature: reading.temperature,
           humidity: reading.humidity,
+          light_intensity: (reading as any).light_intensity ?? null,
           soil_moisture: reading.soil_moisture,
         }));
         setData(formatted);
@@ -71,6 +74,7 @@ export function useHistoricalData() {
               timestamp: new Date(newReading.timestamp).toLocaleTimeString(),
               temperature: newReading.temperature,
               humidity: newReading.humidity,
+              light_intensity: (newReading as any).light_intensity ?? null,
               soil_moisture: newReading.soil_moisture,
             }];
             return updated.slice(-50);
@@ -87,11 +91,12 @@ export function useHistoricalData() {
   const exportToCSV = () => {
     if (rawData.length === 0) return;
 
-    const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)', 'Soil Moisture'];
+    const headers = ['Timestamp', 'Temperature (°C)', 'Humidity (%)', 'Light Intensity', 'Soil Moisture'];
     const rows = rawData.map(r => [
       new Date(r.timestamp).toISOString(),
       r.temperature.toString(),
       r.humidity.toString(),
+      (r.light_intensity ?? '').toString(),
       r.soil_moisture,
     ]);
 

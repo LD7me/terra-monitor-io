@@ -7,6 +7,7 @@ interface SensorData {
   humidity: number;
   soilMoisture: string;
   soilMoisturePercentage: number | null;
+  lightIntensity: number | null;
   timestamp: string;
   batteryPercentage: number | null;
   batteryVoltage: number | null;
@@ -20,6 +21,7 @@ export function useSensorData() {
     humidity: 0,
     soilMoisture: 'Unknown',
     soilMoisturePercentage: null,
+    lightIntensity: null,
     timestamp: new Date().toISOString(),
     batteryPercentage: null,
     batteryVoltage: null,
@@ -46,6 +48,7 @@ export function useSensorData() {
           humidity: data.humidity,
           soilMoisture: data.soil_moisture,
           soilMoisturePercentage: data.soil_moisture_percentage,
+          lightIntensity: (data as any).light_intensity ?? null,
           timestamp: data.timestamp,
           batteryPercentage: data.battery_percentage,
           batteryVoltage: data.battery_voltage,
@@ -83,6 +86,7 @@ export function useSensorData() {
             humidity: newData.humidity,
             soilMoisture: newData.soil_moisture,
             soilMoisturePercentage: newData.soil_moisture_percentage,
+            lightIntensity: newData.light_intensity ?? null,
             timestamp: newData.timestamp,
             batteryPercentage: newData.battery_percentage,
             batteryVoltage: newData.battery_voltage,

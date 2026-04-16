@@ -3,6 +3,7 @@
 export interface SensorData {
   temperature: number;
   humidity: number;
+  light_intensity: number | null;
   soil_moisture: string;
   timestamp: string;
 }

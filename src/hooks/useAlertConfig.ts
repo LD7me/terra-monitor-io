@@ -10,6 +10,8 @@ interface AlertThresholds {
   humidityMax: number;
   soilMoistureMin: number;
   soilMoistureMax: number;
+  lightMin: number;
+  lightMax: number;
   batteryLowThreshold: number;
   sensorOfflineMinutes: number;
   emailAlerts: boolean;
@@ -25,6 +27,8 @@ export function useAlertConfig() {
     humidityMax: 80,
     soilMoistureMin: 30,
     soilMoistureMax: 70,
+    lightMin: 200,
+    lightMax: 800,
     batteryLowThreshold: 20,
     sensorOfflineMinutes: 10,
     emailAlerts: false,
@@ -49,6 +53,8 @@ export function useAlertConfig() {
           humidityMax: data.humidity_max,
           soilMoistureMin: data.soil_moisture_min ?? 30,
           soilMoistureMax: data.soil_moisture_max ?? 70,
+          lightMin: (data as any).light_min ?? 200,
+          lightMax: (data as any).light_max ?? 800,
           batteryLowThreshold: data.battery_low_threshold ?? 20,
           sensorOfflineMinutes: data.sensor_offline_minutes ?? 10,
           emailAlerts: data.email_alerts,
@@ -87,6 +93,8 @@ export function useAlertConfig() {
         humidity_max: newThresholds.humidityMax,
         soil_moisture_min: newThresholds.soilMoistureMin,
         soil_moisture_max: newThresholds.soilMoistureMax,
+        light_min: newThresholds.lightMin,
+        light_max: newThresholds.lightMax,
         battery_low_threshold: newThresholds.batteryLowThreshold,
         sensor_offline_minutes: newThresholds.sensorOfflineMinutes,
         email_alerts: newThresholds.emailAlerts,
