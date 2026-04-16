@@ -74,6 +74,14 @@ export const HistoricalData = () => {
                 name="Humidity (%)"
                 dot={false}
               />
+              <Line 
+                type="monotone" 
+                dataKey="light_intensity" 
+                stroke="hsl(var(--accent))" 
+                strokeWidth={2}
+                name="Light Intensity"
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         ) : (
