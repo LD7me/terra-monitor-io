@@ -13,7 +13,7 @@ import { SoilMoistureCard } from "@/components/SoilMoistureCard";
 import { SoilMoistureHistory } from "@/components/SoilMoistureHistory";
 import { EnhancedAlerts } from "@/components/EnhancedAlerts";
 import { AlertConfigDialog } from "@/components/AlertConfigDialog";
-import { Thermometer, Droplets } from "lucide-react";
+import { Thermometer, Droplets, Sun } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useAlertConfig } from "@/hooks/useAlertConfig";
 
@@ -69,7 +69,7 @@ const Dashboard = () => {
           </div>
 
           {/* Sensor Cards - Responsive Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
             {/* Temperature Card */}
             <Card className="border-2 hover:shadow-lg transition-all">
               <CardHeader className="pb-2">
@@ -79,7 +79,7 @@ const Dashboard = () => {
                     <Thermometer className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
                 </div>
-                <CardDescription className="text-xs sm:text-sm">DHT22 Sensor Reading</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">DHT11 via Arduino</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.temperature, thresholds.tempMin, thresholds.tempMax)}`}>
@@ -103,7 +103,7 @@ const Dashboard = () => {
                     <Droplets className="h-4 w-4 sm:h-5 sm:w-5 text-secondary" />
                   </div>
                 </div>
-                <CardDescription className="text-xs sm:text-sm">Relative Humidity</CardDescription>
+                <CardDescription className="text-xs sm:text-sm">DHT11 via Arduino</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getStatusColor(sensorData.humidity, thresholds.humidityMin, thresholds.humidityMax)}`}>
@@ -114,6 +114,36 @@ const Dashboard = () => {
                     {sensorData.humidity >= thresholds.humidityMin && sensorData.humidity <= thresholds.humidityMax ? "Optimal" : "Alert"}
                   </Badge>
                   <span className="text-muted-foreground">Range: {thresholds.humidityMin}-{thresholds.humidityMax}%</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Light Intensity Card */}
+            <Card className="border-2 hover:shadow-lg transition-all">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base sm:text-lg">Light</CardTitle>
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                    <Sun className="h-4 w-4 sm:h-5 sm:w-5 text-accent" />
+                  </div>
+                </div>
+                <CardDescription className="text-xs sm:text-sm">Light Sensor via Arduino</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl sm:text-4xl font-bold mb-2 ${sensorData.lightIntensity !== null ? getStatusColor(sensorData.lightIntensity, thresholds.lightMin, thresholds.lightMax) : 'text-muted-foreground'}`}>
+                  {sensorData.lightIntensity !== null ? sensorData.lightIntensity : '—'}
+                </div>
+                <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
+                  {sensorData.lightIntensity !== null ? (
+                    <>
+                      <Badge variant={sensorData.lightIntensity >= thresholds.lightMin && sensorData.lightIntensity <= thresholds.lightMax ? "default" : "destructive"}>
+                        {sensorData.lightIntensity >= thresholds.lightMin && sensorData.lightIntensity <= thresholds.lightMax ? "Optimal" : "Alert"}
+                      </Badge>
+                      <span className="text-muted-foreground">Range: {thresholds.lightMin}-{thresholds.lightMax}</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No data yet</span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -173,15 +203,15 @@ const Dashboard = () => {
               <div className="space-y-2 sm:space-y-3 text-xs sm:text-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">1.</span>
-                  <span className="break-all">Install dependencies: <code className="bg-muted px-1 sm:px-2 py-1 rounded text-xs">pip install requests adafruit-circuitpython-dht</code></span>
+                  <span className="break-all">Upload Arduino sketch to read sensors (DHT11, Light, Soil Moisture)</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">2.</span>
-                  <span>Configure your USER_ID in the Pi script</span>
+                  <span>Connect Arduino to Raspberry Pi via USB serial</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">3.</span>
-                  <span>Run the script: <code className="bg-muted px-1 sm:px-2 py-1 rounded text-xs">python3 app.py</code></span>
+                  <span>Configure USER_ID in the Pi script and run: <code className="bg-muted px-1 sm:px-2 py-1 rounded text-xs">python3 app.py</code></span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-primary font-bold">4.</span>

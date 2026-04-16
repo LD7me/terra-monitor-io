@@ -13,6 +13,8 @@ interface AlertThresholds {
   humidityMax: number;
   soilMoistureMin: number;
   soilMoistureMax: number;
+  lightMin: number;
+  lightMax: number;
   batteryLowThreshold: number;
   sensorOfflineMinutes: number;
   emailAlerts: boolean;
@@ -108,6 +110,22 @@ export const AlertConfigDialog = ({
                   type="number"
                   value={localThresholds.soilMoistureMax}
                   onChange={(e) => setLocalThresholds({ ...localThresholds, soilMoistureMax: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Light Min</Label>
+                <Input
+                  type="number"
+                  value={localThresholds.lightMin}
+                  onChange={(e) => setLocalThresholds({ ...localThresholds, lightMin: Number(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Light Max</Label>
+                <Input
+                  type="number"
+                  value={localThresholds.lightMax}
+                  onChange={(e) => setLocalThresholds({ ...localThresholds, lightMax: Number(e.target.value) })}
                 />
               </div>
             </div>
