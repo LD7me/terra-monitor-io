@@ -13,6 +13,7 @@ import { SoilMoistureCard } from "@/components/SoilMoistureCard";
 import { SoilMoistureHistory } from "@/components/SoilMoistureHistory";
 import { EnhancedAlerts } from "@/components/EnhancedAlerts";
 import { AlertConfigDialog } from "@/components/AlertConfigDialog";
+import { AutoControlStatus } from "@/components/AutoControlStatus";
 import { Thermometer, Droplets, Sun } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
 import { useAlertConfig } from "@/hooks/useAlertConfig";
@@ -168,11 +169,21 @@ const Dashboard = () => {
             }}
           />
 
-          {/* Control Panel & Daily Summary */}
+          {/* Control Panel & Auto-Control Status */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <DeviceControlPanel sensorData={sensorData} />
-            <DailySummary />
+            <AutoControlStatus
+              thresholds={{
+                soilMoistureMin: thresholds.soilMoistureMin,
+                soilMoistureMax: thresholds.soilMoistureMax,
+                tempMax: thresholds.tempMax,
+                humidityMax: thresholds.humidityMax,
+              }}
+            />
           </div>
+
+          {/* Daily Summary */}
+          <DailySummary />
 
           {/* Alerts, Weather, Command History */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
