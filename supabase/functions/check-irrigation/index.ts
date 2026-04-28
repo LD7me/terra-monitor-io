@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface AutomationCheckRequest {
   soilMoisture: string;
+  soilMoisturePercentage?: number | null;
   temperature: number;
   humidity: number;
 }
@@ -18,7 +19,6 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Authenticate the caller
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -49,101 +49,134 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { soilMoisture, temperature, humidity }: AutomationCheckRequest = await req.json();
+    const { soilMoisture, soilMoisturePercentage, temperature, humidity }: AutomationCheckRequest = await req.json();
 
-    console.log("Checking automation needs:", { userId, soilMoisture, temperature, humidity });
+    console.log("Auto-control check:", { userId, soilMoisture, soilMoisturePercentage, temperature, humidity });
 
-    // Get user's alert configuration
-    const { data: config, error: configError } = await serviceClient
+    const { data: config } = await serviceClient
       .from('alert_configurations')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (configError) {
-      console.error("Error fetching config:", configError);
-      return new Response(
-        JSON.stringify({ shouldIrrigate: false, shouldFan: false, reason: "No configuration found" }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-      );
+    const soilMin = Number(config?.soil_moisture_min ?? 30);
+    const soilMax = Number(config?.soil_moisture_max ?? 70);
+    const tempMax = Number(config?.temp_max ?? 35);
+    const humidityMax = Number(config?.humidity_max ?? 80);
+
+    // Determine current state from latest executed command per device
+    const { data: recentCommands } = await serviceClient
+      .from('device_commands')
+      .select('device, action, status, created_at')
+      .eq('user_id', userId)
+      .in('device', ['irrigation', 'fan'])
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const currentState = (device: string): 'on' | 'off' | 'unknown' => {
+      const last = recentCommands?.find((c) => c.device === device && c.status === 'executed');
+      return (last?.action as 'on' | 'off') ?? 'unknown';
+    };
+    const hasPending = (device: string) =>
+      recentCommands?.some((c) => c.device === device && c.status === 'pending') ?? false;
+
+    // ===== Irrigation logic (soil moisture thresholds) =====
+    let desiredIrrigation: 'on' | 'off' | null = null;
+    let irrigationReason = '';
+
+    const soilPct = typeof soilMoisturePercentage === 'number' ? soilMoisturePercentage : null;
+
+    if (soilPct !== null) {
+      if (soilPct < soilMin) {
+        desiredIrrigation = 'on';
+        irrigationReason = `Soil moisture ${soilPct}% below minimum ${soilMin}%`;
+      } else if (soilPct > soilMax) {
+        desiredIrrigation = 'off';
+        irrigationReason = `Soil moisture ${soilPct}% above maximum ${soilMax}%`;
+      }
+    } else {
+      // Fallback to digital classification
+      if (soilMoisture === 'Dry') {
+        desiredIrrigation = 'on';
+        irrigationReason = 'Soil is Dry';
+      } else if (soilMoisture === 'Wet') {
+        desiredIrrigation = 'off';
+        irrigationReason = 'Soil is Wet';
+      }
     }
 
-    // Irrigation logic
-    let shouldIrrigate = false;
-    let irrigationReason = "";
-
-    if (soilMoisture === "Dry") {
-      shouldIrrigate = true;
-      irrigationReason = "Soil moisture is too low (Dry)";
-    } else if (temperature > (config?.temp_max || 35) && soilMoisture !== "Wet") {
-      shouldIrrigate = true;
-      irrigationReason = `High temperature (${temperature}°C) detected with non-optimal soil moisture`;
-    }
-
-    // Fan control logic
-    let shouldFan = false;
-    let fanReason = "";
-
-    const tempMax = config?.temp_max || 35;
-    const humidityMax = config?.humidity_max || 80;
+    // ===== Fan logic (temperature/humidity thresholds) =====
+    let desiredFan: 'on' | 'off' | null = null;
+    let fanReason = '';
 
     if (temperature > tempMax) {
-      shouldFan = true;
-      fanReason = `Temperature (${temperature}°C) exceeds threshold (${tempMax}°C)`;
+      desiredFan = 'on';
+      fanReason = `Temperature ${temperature}°C above ${tempMax}°C`;
     } else if (humidity > humidityMax) {
-      shouldFan = true;
-      fanReason = `Humidity (${humidity}%) exceeds threshold (${humidityMax}%)`;
+      desiredFan = 'on';
+      fanReason = `Humidity ${humidity}% above ${humidityMax}%`;
+    } else if (temperature < tempMax - 2 && humidity < humidityMax - 5) {
+      desiredFan = 'off';
+      fanReason = `Climate back within range`;
     }
 
-    // Log irrigation action
-    if (shouldIrrigate) {
-      await serviceClient.from('irrigation_logs').insert({
+    const queueCommand = async (device: 'irrigation' | 'fan', action: 'on' | 'off', reason: string) => {
+      if (hasPending(device)) {
+        console.log(`Skip ${device} ${action}: pending command exists`);
+        return false;
+      }
+      if (currentState(device) === action) {
+        console.log(`Skip ${device} ${action}: already ${action}`);
+        return false;
+      }
+      const { error } = await serviceClient.from('device_commands').insert({
         user_id: userId,
-        action: 'auto',
-        trigger_type: 'threshold',
-        soil_moisture: soilMoisture,
-        temperature: temperature,
-        reason: irrigationReason,
+        device,
+        action,
+        status: 'pending',
       });
-      console.log("Irrigation logged:", irrigationReason);
-    }
+      if (error) {
+        console.error(`Failed to queue ${device} command:`, error);
+        return false;
+      }
+      if (device === 'irrigation') {
+        await serviceClient.from('irrigation_logs').insert({
+          user_id: userId,
+          action,
+          trigger_type: 'auto',
+          soil_moisture: soilMoisture,
+          temperature,
+          reason: `AUTO: ${reason}`,
+        });
+      }
+      console.log(`Queued ${device} -> ${action} (${reason})`);
+      return true;
+    };
 
-    // Log fan action
-    if (shouldFan) {
-      await serviceClient.from('irrigation_logs').insert({
-        user_id: userId,
-        action: 'fan_auto',
-        trigger_type: 'threshold',
-        soil_moisture: soilMoisture,
-        temperature: temperature,
-        reason: fanReason,
-      });
-      console.log("Fan action logged:", fanReason);
-    }
+    let irrigationQueued = false;
+    let fanQueued = false;
 
-    console.log("Automation decision:", { shouldIrrigate, irrigationReason, shouldFan, fanReason });
+    if (desiredIrrigation) {
+      irrigationQueued = await queueCommand('irrigation', desiredIrrigation, irrigationReason);
+    }
+    if (desiredFan) {
+      fanQueued = await queueCommand('fan', desiredFan, fanReason);
+    }
 
     return new Response(
-      JSON.stringify({ 
-        shouldIrrigate, 
-        irrigationReason,
-        shouldFan,
-        fanReason 
+      JSON.stringify({
+        irrigation: { desired: desiredIrrigation, queued: irrigationQueued, reason: irrigationReason },
+        fan: { desired: desiredFan, queued: fanQueued, reason: fanReason },
+        thresholds: { soilMin, soilMax, tempMax, humidityMax },
       }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error("Error in check-irrigation function:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
-    );
+    console.error("Error in check-irrigation:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders },
+    });
   }
 };
 

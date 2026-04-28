@@ -150,17 +150,21 @@ export function useSensorData() {
       }
     }
 
-    // Check automated irrigation
-    const { data: irrigationCheck } = await supabase.functions.invoke('check-irrigation', {
+    // Automatic relay control based on thresholds
+    const { data: autoCheck } = await supabase.functions.invoke('check-irrigation', {
       body: {
         soilMoisture: data.soilMoisture,
+        soilMoisturePercentage: data.soilMoisturePercentage,
         temperature: data.temperature,
         humidity: data.humidity,
       },
     });
 
-    if (irrigationCheck?.shouldIrrigate) {
-      console.log('Automated irrigation triggered:', irrigationCheck.reason);
+    if (autoCheck?.irrigation?.queued) {
+      console.log('Auto irrigation queued:', autoCheck.irrigation.reason);
+    }
+    if (autoCheck?.fan?.queued) {
+      console.log('Auto fan queued:', autoCheck.fan.reason);
     }
   };
 
