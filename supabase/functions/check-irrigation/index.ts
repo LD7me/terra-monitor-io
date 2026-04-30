@@ -11,7 +11,11 @@ interface AutomationCheckRequest {
   soilMoisturePercentage?: number | null;
   temperature: number;
   humidity: number;
+  dli?: number | null;
+  isDay?: boolean | null;
 }
+
+const GROW_LIGHT_RUNTIME_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
@@ -49,9 +53,9 @@ const handler = async (req: Request): Promise<Response> => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { soilMoisture, soilMoisturePercentage, temperature, humidity }: AutomationCheckRequest = await req.json();
+    const { soilMoisture, soilMoisturePercentage, temperature, humidity, dli, isDay }: AutomationCheckRequest = await req.json();
 
-    console.log("Auto-control check:", { userId, soilMoisture, soilMoisturePercentage, temperature, humidity });
+    console.log("Auto-control check:", { userId, soilMoisture, soilMoisturePercentage, temperature, humidity, dli, isDay });
 
     const { data: config } = await serviceClient
       .from('alert_configurations')
@@ -63,18 +67,22 @@ const handler = async (req: Request): Promise<Response> => {
     const soilMax = Number(config?.soil_moisture_max ?? 70);
     const tempMax = Number(config?.temp_max ?? 35);
     const humidityMax = Number(config?.humidity_max ?? 80);
+    const dliThreshold = Number((config as any)?.dli_threshold ?? 12);
 
     // Determine current state from latest executed command per device
     const { data: recentCommands } = await serviceClient
       .from('device_commands')
-      .select('device, action, status, created_at')
+      .select('device, action, status, created_at, executed_at')
       .eq('user_id', userId)
-      .in('device', ['irrigation', 'fan'])
+      .in('device', ['irrigation', 'fan', 'grow_light'])
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(40);
+
+    const lastExecuted = (device: string) =>
+      recentCommands?.find((c) => c.device === device && c.status === 'executed') ?? null;
 
     const currentState = (device: string): 'on' | 'off' | 'unknown' => {
-      const last = recentCommands?.find((c) => c.device === device && c.status === 'executed');
+      const last = lastExecuted(device);
       return (last?.action as 'on' | 'off') ?? 'unknown';
     };
     const hasPending = (device: string) =>
@@ -95,7 +103,6 @@ const handler = async (req: Request): Promise<Response> => {
         irrigationReason = `Soil moisture ${soilPct}% above maximum ${soilMax}%`;
       }
     } else {
-      // Fallback to digital classification
       if (soilMoisture === 'Dry') {
         desiredIrrigation = 'on';
         irrigationReason = 'Soil is Dry';
@@ -120,7 +127,37 @@ const handler = async (req: Request): Promise<Response> => {
       fanReason = `Climate back within range`;
     }
 
-    const queueCommand = async (device: 'irrigation' | 'fan', action: 'on' | 'off', reason: string) => {
+    // ===== Grow light logic (DLI threshold, evaluated at sunset) =====
+    // Trigger ON when daylight ends (isDay=false) AND accumulated DLI < threshold.
+    // Auto-OFF after 2 hours of runtime since last 'on' executed command.
+    let desiredGrowLight: 'on' | 'off' | null = null;
+    let growLightReason = '';
+
+    if (typeof dli === 'number') {
+      const lastGrowOn = recentCommands?.find(
+        (c) => c.device === 'grow_light' && c.action === 'on' && c.status === 'executed'
+      );
+      const onSince = lastGrowOn?.executed_at ? new Date(lastGrowOn.executed_at).getTime() : null;
+      const isCurrentlyOn = currentState('grow_light') === 'on';
+
+      // Auto-off after 2 hours
+      if (isCurrentlyOn && onSince && Date.now() - onSince >= GROW_LIGHT_RUNTIME_MS) {
+        desiredGrowLight = 'off';
+        growLightReason = `Grow light ran for 2h, turning off`;
+      } else if (isDay === false && dli < dliThreshold && !isCurrentlyOn) {
+        desiredGrowLight = 'on';
+        growLightReason = `Daily DLI ${dli.toFixed(2)} below threshold ${dliThreshold} mol/m²`;
+      } else if (isDay === true && isCurrentlyOn) {
+        desiredGrowLight = 'off';
+        growLightReason = `Daylight returned, turning grow light off`;
+      }
+    }
+
+    const queueCommand = async (
+      device: 'irrigation' | 'fan' | 'grow_light',
+      action: 'on' | 'off',
+      reason: string,
+    ) => {
       if (hasPending(device)) {
         console.log(`Skip ${device} ${action}: pending command exists`);
         return false;
@@ -155,6 +192,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     let irrigationQueued = false;
     let fanQueued = false;
+    let growLightQueued = false;
 
     if (desiredIrrigation) {
       irrigationQueued = await queueCommand('irrigation', desiredIrrigation, irrigationReason);
@@ -162,12 +200,16 @@ const handler = async (req: Request): Promise<Response> => {
     if (desiredFan) {
       fanQueued = await queueCommand('fan', desiredFan, fanReason);
     }
+    if (desiredGrowLight) {
+      growLightQueued = await queueCommand('grow_light', desiredGrowLight, growLightReason);
+    }
 
     return new Response(
       JSON.stringify({
         irrigation: { desired: desiredIrrigation, queued: irrigationQueued, reason: irrigationReason },
         fan: { desired: desiredFan, queued: fanQueued, reason: fanReason },
-        thresholds: { soilMin, soilMax, tempMax, humidityMax },
+        grow_light: { desired: desiredGrowLight, queued: growLightQueued, reason: growLightReason },
+        thresholds: { soilMin, soilMax, tempMax, humidityMax, dliThreshold },
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
