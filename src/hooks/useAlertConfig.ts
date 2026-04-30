@@ -12,6 +12,7 @@ interface AlertThresholds {
   soilMoistureMax: number;
   lightMin: number;
   lightMax: number;
+  dliThreshold: number;
   batteryLowThreshold: number;
   sensorOfflineMinutes: number;
   emailAlerts: boolean;
@@ -29,6 +30,7 @@ export function useAlertConfig() {
     soilMoistureMax: 70,
     lightMin: 200,
     lightMax: 800,
+    dliThreshold: 12,
     batteryLowThreshold: 20,
     sensorOfflineMinutes: 10,
     emailAlerts: false,
@@ -55,13 +57,13 @@ export function useAlertConfig() {
           soilMoistureMax: data.soil_moisture_max ?? 70,
           lightMin: (data as any).light_min ?? 200,
           lightMax: (data as any).light_max ?? 800,
+          dliThreshold: Number((data as any).dli_threshold ?? 12),
           batteryLowThreshold: data.battery_low_threshold ?? 20,
           sensorOfflineMinutes: data.sensor_offline_minutes ?? 10,
           emailAlerts: data.email_alerts,
           emailAddress: data.email_address || '',
         });
       } else if (!error) {
-        // Create default config
         await supabase.from('alert_configurations').insert({
           user_id: user.id,
           temp_min: 15,
@@ -73,7 +75,7 @@ export function useAlertConfig() {
           battery_low_threshold: 20,
           sensor_offline_minutes: 10,
           email_alerts: false,
-        });
+        } as any);
       }
     };
 
@@ -95,11 +97,12 @@ export function useAlertConfig() {
         soil_moisture_max: newThresholds.soilMoistureMax,
         light_min: newThresholds.lightMin,
         light_max: newThresholds.lightMax,
+        dli_threshold: newThresholds.dliThreshold,
         battery_low_threshold: newThresholds.batteryLowThreshold,
         sensor_offline_minutes: newThresholds.sensorOfflineMinutes,
         email_alerts: newThresholds.emailAlerts,
         email_address: newThresholds.emailAddress,
-      });
+      } as any);
 
     if (error) {
       toast.error('Failed to save alert configuration');
