@@ -15,6 +15,7 @@ interface AlertThresholds {
   soilMoistureMax: number;
   lightMin: number;
   lightMax: number;
+  dliThreshold: number;
   batteryLowThreshold: number;
   sensorOfflineMinutes: number;
   emailAlerts: boolean;
@@ -127,6 +128,16 @@ export const AlertConfigDialog = ({
                   value={localThresholds.lightMax}
                   onChange={(e) => setLocalThresholds({ ...localThresholds, lightMax: Number(e.target.value) })}
                 />
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label className="text-xs">DLI Threshold (mol/m²/day)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={localThresholds.dliThreshold}
+                  onChange={(e) => setLocalThresholds({ ...localThresholds, dliThreshold: Number(e.target.value) })}
+                />
+                <p className="text-[10px] text-muted-foreground">Grow light turns ON at sunset if accumulated DLI is below this value (default 12)</p>
               </div>
             </div>
           </TabsContent>
