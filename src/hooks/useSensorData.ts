@@ -8,6 +8,10 @@ interface SensorData {
   soilMoisture: string;
   soilMoisturePercentage: number | null;
   lightIntensity: number | null;
+  lux: number | null;
+  ppfd: number | null;
+  dli: number | null;
+  isDay: boolean | null;
   timestamp: string;
   batteryPercentage: number | null;
   batteryVoltage: number | null;
