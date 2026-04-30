@@ -3,11 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+type Device = 'irrigation' | 'fan' | 'grow_light';
+
 interface DeviceState {
   irrigationActive: boolean;
   fanActive: boolean;
+  growLightActive: boolean;
   irrigationPending: boolean;
   fanPending: boolean;
+  growLightPending: boolean;
 }
 
 export function useDeviceControl(sensorData: { soilMoisture: string; temperature: number }) {
@@ -15,43 +19,43 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
   const [state, setState] = useState<DeviceState>({
     irrigationActive: false,
     fanActive: false,
+    growLightActive: false,
     irrigationPending: false,
     fanPending: false,
+    growLightPending: false,
   });
-  const [sendingCommand, setSendingCommand] = useState<'irrigation' | 'fan' | null>(null);
+  const [sendingCommand, setSendingCommand] = useState<Device | null>(null);
 
-  // Fetch current device states from latest executed commands
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchDeviceStates = async () => {
-      // Get latest executed command for each device
       const { data: commands } = await supabase
         .from('device_commands')
         .select('device, action, status')
         .eq('user_id', user.id)
-        .in('device', ['irrigation', 'fan'])
+        .in('device', ['irrigation', 'fan', 'grow_light'])
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (commands) {
         const latestIrrigation = commands.find(c => c.device === 'irrigation' && c.status === 'executed');
         const latestFan = commands.find(c => c.device === 'fan' && c.status === 'executed');
-        const pendingIrrigation = commands.some(c => c.device === 'irrigation' && c.status === 'pending');
-        const pendingFan = commands.some(c => c.device === 'fan' && c.status === 'pending');
+        const latestGrowLight = commands.find(c => c.device === 'grow_light' && c.status === 'executed');
 
         setState({
           irrigationActive: latestIrrigation?.action === 'on',
           fanActive: latestFan?.action === 'on',
-          irrigationPending: pendingIrrigation,
-          fanPending: pendingFan,
+          growLightActive: latestGrowLight?.action === 'on',
+          irrigationPending: commands.some(c => c.device === 'irrigation' && c.status === 'pending'),
+          fanPending: commands.some(c => c.device === 'fan' && c.status === 'pending'),
+          growLightPending: commands.some(c => c.device === 'grow_light' && c.status === 'pending'),
         });
       }
     };
 
     fetchDeviceStates();
 
-    // Subscribe to command updates
     const channel = supabase
       .channel('device_commands_realtime')
       .on(
@@ -64,8 +68,8 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
         },
         (payload) => {
           const cmd = payload.new as any;
-          if (cmd.status === 'executed') {
-            toast.success(`${cmd.device} ${cmd.action.toUpperCase()} executed`, {
+          if (cmd?.status === 'executed') {
+            toast.success(`${cmd.device} ${String(cmd.action).toUpperCase()} executed`, {
               description: "Pi confirmed command execution"
             });
           }
@@ -79,7 +83,7 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
     };
   }, [user?.id]);
 
-  const sendCommand = useCallback(async (device: 'irrigation' | 'fan', action: 'on' | 'off') => {
+  const sendCommand = useCallback(async (device: Device, action: 'on' | 'off') => {
     if (!user?.id) {
       toast.error("You must be logged in to control devices");
       return;
@@ -96,7 +100,6 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
 
       if (error) throw error;
 
-      // Log irrigation actions
       if (device === 'irrigation') {
         await supabase.from('irrigation_logs').insert({
           user_id: user.id,
@@ -112,10 +115,9 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
         description: "Waiting for Pi to execute..."
       });
 
-      // Update pending state
       setState(prev => ({
         ...prev,
-        [`${device}Pending`]: true,
+        [`${device === 'grow_light' ? 'growLight' : device}Pending`]: true,
       }));
     } catch (error) {
       console.error('Failed to send command:', error);
@@ -126,19 +128,22 @@ export function useDeviceControl(sensorData: { soilMoisture: string; temperature
   }, [user?.id, sensorData]);
 
   const toggleIrrigation = useCallback(() => {
-    const action = state.irrigationActive ? 'off' : 'on';
-    sendCommand('irrigation', action);
+    sendCommand('irrigation', state.irrigationActive ? 'off' : 'on');
   }, [state.irrigationActive, sendCommand]);
 
   const toggleFan = useCallback(() => {
-    const action = state.fanActive ? 'off' : 'on';
-    sendCommand('fan', action);
+    sendCommand('fan', state.fanActive ? 'off' : 'on');
   }, [state.fanActive, sendCommand]);
+
+  const toggleGrowLight = useCallback(() => {
+    sendCommand('grow_light', state.growLightActive ? 'off' : 'on');
+  }, [state.growLightActive, sendCommand]);
 
   return {
     ...state,
     sendingCommand,
     toggleIrrigation,
     toggleFan,
+    toggleGrowLight,
   };
 }

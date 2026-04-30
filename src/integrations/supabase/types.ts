@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           battery_low_threshold: number | null
           created_at: string
+          dli_threshold: number
           email_address: string | null
           email_alerts: boolean
           humidity_max: number
@@ -36,6 +37,7 @@ export type Database = {
         Insert: {
           battery_low_threshold?: number | null
           created_at?: string
+          dli_threshold?: number
           email_address?: string | null
           email_alerts?: boolean
           humidity_max?: number
@@ -54,6 +56,7 @@ export type Database = {
         Update: {
           battery_low_threshold?: number | null
           created_at?: string
+          dli_threshold?: number
           email_address?: string | null
           email_alerts?: boolean
           humidity_max?: number
@@ -190,9 +193,13 @@ export type Database = {
           battery_percentage: number | null
           battery_voltage: number | null
           created_at: string
+          dli: number | null
           humidity: number
           id: string
+          is_day: boolean | null
           light_intensity: number | null
+          lux: number | null
+          ppfd: number | null
           soil_moisture: string
           soil_moisture_percentage: number | null
           temperature: number
@@ -204,9 +211,13 @@ export type Database = {
           battery_percentage?: number | null
           battery_voltage?: number | null
           created_at?: string
+          dli?: number | null
           humidity: number
           id?: string
+          is_day?: boolean | null
           light_intensity?: number | null
+          lux?: number | null
+          ppfd?: number | null
           soil_moisture: string
           soil_moisture_percentage?: number | null
           temperature: number
@@ -218,9 +229,13 @@ export type Database = {
           battery_percentage?: number | null
           battery_voltage?: number | null
           created_at?: string
+          dli?: number | null
           humidity?: number
           id?: string
+          is_day?: boolean | null
           light_intensity?: number | null
+          lux?: number | null
+          ppfd?: number | null
           soil_moisture?: string
           soil_moisture_percentage?: number | null
           temperature?: number
