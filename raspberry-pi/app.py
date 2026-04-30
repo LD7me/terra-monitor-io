@@ -57,7 +57,7 @@ DEVICE_PINS = {
 }
 
 # Most relay modules are ACTIVE-LOW (LOW = ON). Flip if yours is active-high.
-RELAY_ACTIVE_LOW = True
+RELAY_ACTIVE_LOW = False
 
 
 def relay_write(pin: int, on: bool):
