@@ -31,7 +31,7 @@ SUPABASE_ANON_KEY = os.environ.get(
     "SUPABASE_ANON_KEY",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrb3J4dXJia2R3ZndnaWdlZ2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NzE5ODksImV4cCI6MjA3OTE0Nzk4OX0.l6ujyIyECylWfnqTRUszQhvPchXkYYNm4zm_ir2GtdI",
 )
-USER_ID = os.environ.get("TERRAMONITOR_USER_ID", "PUT-YOUR-USER-UUID-HERE")
+USER_ID = os.environ.get("TERRAMONITOR_USER_ID", "d2b2193b-ecf1-4822-a071-be1e8a89a45d")
 
 # How often (seconds) to push readings and poll commands
 PUSH_INTERVAL = 5
