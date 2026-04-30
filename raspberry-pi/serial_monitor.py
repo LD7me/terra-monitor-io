@@ -9,13 +9,15 @@ import json
 
 
 def find_arduino():
-    """Auto-detect the Arduino USB serial port."""
     ports = serial.tools.list_ports.comports()
+
     for port in ports:
-        desc = (port.description or "").lower()
-        if "arduino" in desc or "usb serial" in desc or "ch340" in desc or "ttyusb" in desc or "ttyacm" in desc:
+        print(port.device, "|", port.description)  # debug
+
+        if port.device.startswith("/dev/ttyACM") or port.device.startswith("/dev/ttyUSB"):
             return port.device
-    raise Exception("Arduino not found on any USB serial port")
+
+    raise Exception("Arduino not found")
 
 
 class ArduinoSensor:
