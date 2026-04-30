@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Droplets, Fan, Clock } from 'lucide-react';
+import { Bot, Droplets, Fan, Lightbulb, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
@@ -12,7 +12,10 @@ interface AutoControlStatusProps {
     soilMoistureMax: number;
     tempMax: number;
     humidityMax: number;
+    dliThreshold: number;
   };
+  currentDli?: number | null;
+  isDay?: boolean | null;
 }
 
 interface AutoEvent {
@@ -22,10 +25,11 @@ interface AutoEvent {
   created_at: string;
 }
 
-export function AutoControlStatus({ thresholds }: AutoControlStatusProps) {
+export function AutoControlStatus({ thresholds, currentDli, isDay }: AutoControlStatusProps) {
   const { user } = useAuth();
   const [lastIrrigation, setLastIrrigation] = useState<AutoEvent | null>(null);
   const [lastFan, setLastFan] = useState<AutoEvent | null>(null);
+  const [lastGrowLight, setLastGrowLight] = useState<AutoEvent | null>(null);
   const [lastAutoLog, setLastAutoLog] = useState<{ reason: string; timestamp: string } | null>(null);
 
   useEffect(() => {
@@ -36,13 +40,14 @@ export function AutoControlStatus({ thresholds }: AutoControlStatusProps) {
         .from('device_commands')
         .select('device, action, status, created_at')
         .eq('user_id', user.id)
-        .in('device', ['irrigation', 'fan'])
+        .in('device', ['irrigation', 'fan', 'grow_light'])
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(30);
 
       if (cmds) {
         setLastIrrigation(cmds.find((c) => c.device === 'irrigation') ?? null);
         setLastFan(cmds.find((c) => c.device === 'fan') ?? null);
+        setLastGrowLight(cmds.find((c) => c.device === 'grow_light') ?? null);
       }
 
       const { data: logs } = await supabase
@@ -118,25 +123,34 @@ export function AutoControlStatus({ thresholds }: AutoControlStatusProps) {
           <Badge variant="default" className="text-[10px]">ACTIVE</Badge>
         </div>
         <CardDescription className="text-xs">
-          Pump &amp; fan switch automatically when sensors cross thresholds
+          Pump, fan &amp; grow light switch automatically when sensors cross thresholds
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Active thresholds */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-xs">
           <div className="p-2 rounded-md bg-muted/50">
             <p className="text-muted-foreground">Soil moisture</p>
-            <p className="font-semibold">{thresholds.soilMoistureMin}% – {thresholds.soilMoistureMax}%</p>
+            <p className="font-semibold">{thresholds.soilMoistureMin}%–{thresholds.soilMoistureMax}%</p>
           </div>
           <div className="p-2 rounded-md bg-muted/50">
             <p className="text-muted-foreground">Fan triggers</p>
             <p className="font-semibold">&gt;{thresholds.tempMax}°C / &gt;{thresholds.humidityMax}%</p>
           </div>
+          <div className="p-2 rounded-md bg-muted/50">
+            <p className="text-muted-foreground">DLI threshold</p>
+            <p className="font-semibold">
+              {typeof currentDli === 'number' ? `${currentDli.toFixed(1)} / ` : ''}{thresholds.dliThreshold} mol/m²
+              {isDay === true && <span className="ml-1 text-[9px] text-primary">DAY</span>}
+              {isDay === false && <span className="ml-1 text-[9px] text-muted-foreground">NIGHT</span>}
+            </p>
+          </div>
         </div>
 
         {/* Latest auto actions */}
-        {renderEvent('Irrigation', <Droplets className="h-4 w-4 text-secondary" />, lastIrrigation)}
-        {renderEvent('Fan', <Fan className="h-4 w-4 text-accent" />, lastFan)}
+        {renderEvent('Irrigation (GPIO 18)', <Droplets className="h-4 w-4 text-secondary" />, lastIrrigation)}
+        {renderEvent('Fan (GPIO 23)', <Fan className="h-4 w-4 text-accent" />, lastFan)}
+        {renderEvent('Grow Light (GPIO 24)', <Lightbulb className="h-4 w-4 text-primary" />, lastGrowLight)}
 
         {/* Last auto reason */}
         {lastAutoLog && (

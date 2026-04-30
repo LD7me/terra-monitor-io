@@ -178,7 +178,10 @@ const Dashboard = () => {
                 soilMoistureMax: thresholds.soilMoistureMax,
                 tempMax: thresholds.tempMax,
                 humidityMax: thresholds.humidityMax,
+                dliThreshold: thresholds.dliThreshold,
               }}
+              currentDli={sensorData.dli}
+              isDay={sensorData.isDay}
             />
           </div>
 
