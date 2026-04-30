@@ -18,25 +18,46 @@ interface SensorData {
   wifiSignalStrength: number | null;
 }
 
+const initialData: SensorData = {
+  temperature: 0,
+  humidity: 0,
+  soilMoisture: 'Unknown',
+  soilMoisturePercentage: null,
+  lightIntensity: null,
+  lux: null,
+  ppfd: null,
+  dli: null,
+  isDay: null,
+  timestamp: new Date().toISOString(),
+  batteryPercentage: null,
+  batteryVoltage: null,
+  wifiSignalStrength: null,
+};
+
+const mapRow = (row: any): SensorData => ({
+  temperature: row.temperature,
+  humidity: row.humidity,
+  soilMoisture: row.soil_moisture,
+  soilMoisturePercentage: row.soil_moisture_percentage,
+  lightIntensity: row.light_intensity ?? null,
+  lux: row.lux ?? null,
+  ppfd: row.ppfd ?? null,
+  dli: row.dli ?? null,
+  isDay: row.is_day ?? null,
+  timestamp: row.timestamp,
+  batteryPercentage: row.battery_percentage,
+  batteryVoltage: row.battery_voltage,
+  wifiSignalStrength: row.wifi_signal_strength,
+});
+
 export function useSensorData() {
   const { user } = useAuth();
-  const [sensorData, setSensorData] = useState<SensorData>({
-    temperature: 0,
-    humidity: 0,
-    soilMoisture: 'Unknown',
-    soilMoisturePercentage: null,
-    lightIntensity: null,
-    timestamp: new Date().toISOString(),
-    batteryPercentage: null,
-    batteryVoltage: null,
-    wifiSignalStrength: null,
-  });
+  const [sensorData, setSensorData] = useState<SensorData>(initialData);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
-    // Fetch initial data
     const fetchLatestReading = async () => {
       const { data, error } = await supabase
         .from('sensor_readings')
@@ -47,32 +68,18 @@ export function useSensorData() {
         .maybeSingle();
 
       if (data && !error) {
-        const newData = {
-          temperature: data.temperature,
-          humidity: data.humidity,
-          soilMoisture: data.soil_moisture,
-          soilMoisturePercentage: data.soil_moisture_percentage,
-          lightIntensity: (data as any).light_intensity ?? null,
-          timestamp: data.timestamp,
-          batteryPercentage: data.battery_percentage,
-          batteryVoltage: data.battery_voltage,
-          wifiSignalStrength: data.wifi_signal_strength,
-        };
+        const newData = mapRow(data);
         setSensorData(newData);
-        
-        // Check if data is recent (within last 30 seconds)
+
         const lastUpdate = new Date(data.timestamp).getTime();
-        const now = Date.now();
-        setIsConnected(now - lastUpdate < 30000);
-        
-        // Check alerts and irrigation
+        setIsConnected(Date.now() - lastUpdate < 30000);
+
         checkAlertsAndIrrigation(newData);
       }
     };
 
     fetchLatestReading();
 
-    // Subscribe to realtime updates
     const channel = supabase
       .channel('sensor_readings_realtime')
       .on(
@@ -84,18 +91,7 @@ export function useSensorData() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          const newData = payload.new as any;
-          const formattedData = {
-            temperature: newData.temperature,
-            humidity: newData.humidity,
-            soilMoisture: newData.soil_moisture,
-            soilMoisturePercentage: newData.soil_moisture_percentage,
-            lightIntensity: newData.light_intensity ?? null,
-            timestamp: newData.timestamp,
-            batteryPercentage: newData.battery_percentage,
-            batteryVoltage: newData.battery_voltage,
-            wifiSignalStrength: newData.wifi_signal_strength,
-          };
+          const formattedData = mapRow(payload.new);
           setSensorData(formattedData);
           setIsConnected(true);
           checkAlertsAndIrrigation(formattedData);
@@ -103,7 +99,6 @@ export function useSensorData() {
       )
       .subscribe();
 
-    // Poll every 10 seconds as backup
     const interval = setInterval(fetchLatestReading, 10000);
 
     return () => {
@@ -115,7 +110,6 @@ export function useSensorData() {
   const checkAlertsAndIrrigation = async (data: SensorData) => {
     if (!user) return;
 
-    // Get user's alert configuration
     const { data: config } = await supabase
       .from('alert_configurations')
       .select('*')
@@ -124,24 +118,14 @@ export function useSensorData() {
 
     if (!config) return;
 
-    // Check for threshold breaches and send email alerts if enabled
     if (config.email_alerts && config.email_address) {
       const alerts: { type: string; value: number; threshold: number }[] = [];
 
-      if (data.temperature < config.temp_min) {
-        alerts.push({ type: 'Temperature Too Low', value: data.temperature, threshold: config.temp_min });
-      }
-      if (data.temperature > config.temp_max) {
-        alerts.push({ type: 'Temperature Too High', value: data.temperature, threshold: config.temp_max });
-      }
-      if (data.humidity < config.humidity_min) {
-        alerts.push({ type: 'Humidity Too Low', value: data.humidity, threshold: config.humidity_min });
-      }
-      if (data.humidity > config.humidity_max) {
-        alerts.push({ type: 'Humidity Too High', value: data.humidity, threshold: config.humidity_max });
-      }
+      if (data.temperature < config.temp_min) alerts.push({ type: 'Temperature Too Low', value: data.temperature, threshold: config.temp_min });
+      if (data.temperature > config.temp_max) alerts.push({ type: 'Temperature Too High', value: data.temperature, threshold: config.temp_max });
+      if (data.humidity < config.humidity_min) alerts.push({ type: 'Humidity Too Low', value: data.humidity, threshold: config.humidity_min });
+      if (data.humidity > config.humidity_max) alerts.push({ type: 'Humidity Too High', value: data.humidity, threshold: config.humidity_max });
 
-      // Send email alerts
       for (const alert of alerts) {
         await supabase.functions.invoke('send-alert-email', {
           body: {
@@ -154,22 +138,20 @@ export function useSensorData() {
       }
     }
 
-    // Automatic relay control based on thresholds
     const { data: autoCheck } = await supabase.functions.invoke('check-irrigation', {
       body: {
         soilMoisture: data.soilMoisture,
         soilMoisturePercentage: data.soilMoisturePercentage,
         temperature: data.temperature,
         humidity: data.humidity,
+        dli: data.dli,
+        isDay: data.isDay,
       },
     });
 
-    if (autoCheck?.irrigation?.queued) {
-      console.log('Auto irrigation queued:', autoCheck.irrigation.reason);
-    }
-    if (autoCheck?.fan?.queued) {
-      console.log('Auto fan queued:', autoCheck.fan.reason);
-    }
+    if (autoCheck?.irrigation?.queued) console.log('Auto irrigation queued:', autoCheck.irrigation.reason);
+    if (autoCheck?.fan?.queued) console.log('Auto fan queued:', autoCheck.fan.reason);
+    if (autoCheck?.grow_light?.queued) console.log('Auto grow light queued:', autoCheck.grow_light.reason);
   };
 
   return { sensorData, isConnected };
