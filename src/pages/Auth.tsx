@@ -29,31 +29,15 @@ export default function Auth() {
   const [signupData, setSignupData] = useState({ email: '', password: '', confirmPassword: '', fullName: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const isEditorOrigin = typeof window !== 'undefined' && window.location.hostname.endsWith('lovableproject.com');
-  const previewAuthUrl = 'https://id-preview--97c25c50-7c76-4f40-9037-3acf3afdfbd3.lovable.app/auth';
-
   useEffect(() => {
-    if (isEditorOrigin) {
-      window.location.href = previewAuthUrl;
+    if (user) {
+      navigate('/dashboard', { replace: true });
     }
-  }, [isEditorOrigin]);
-
-  if (isEditorOrigin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
-        <Card className="w-full max-w-sm">
-          <CardContent className="flex flex-col items-center gap-3 pt-6">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Redirecting to login...</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
