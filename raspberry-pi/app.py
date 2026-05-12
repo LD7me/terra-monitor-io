@@ -27,10 +27,20 @@ from serial_monitor import ArduinoSensor
 #  CONFIG — fill these in for your Pi
 # ============================================================
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://skorxurbkdwfwgigegez.supabase.co")
+
+# IMPORTANT: The Pi must use the SERVICE ROLE key to bypass RLS when writing
+# sensor_readings on behalf of the user. NEVER ship this key in the web app.
+# Get it from: Lovable Cloud -> Backend -> API keys -> service_role
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+# Fallback to anon (will fail RLS on insert — kept only so polling reads still work in dev)
 SUPABASE_ANON_KEY = os.environ.get(
     "SUPABASE_ANON_KEY",
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrb3J4dXJia2R3ZndnaWdlZ2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NzE5ODksImV4cCI6MjA3OTE0Nzk4OX0.l6ujyIyECylWfnqTRUszQhvPchXkYYNm4zm_ir2GtdI",
 )
+SUPABASE_KEY = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
+if not SUPABASE_SERVICE_KEY:
+    print("[warn] SUPABASE_SERVICE_ROLE_KEY not set — inserts will fail due to RLS!")
+
 USER_ID = os.environ.get("TERRAMONITOR_USER_ID", "d2b2193b-ecf1-4822-a071-be1e8a89a45d")
 
 # How often (seconds) to push readings and poll commands
@@ -81,8 +91,8 @@ def setup_gpio():
 # ============================================================
 def sb_headers():
     return {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
