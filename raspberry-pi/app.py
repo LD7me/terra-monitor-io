@@ -1,76 +1,145 @@
 """
-Raspberry Pi controller — TerraMonitor
+TerraMonitor Pi controller — LOCAL ONLY (SQLite + Flask)
 
-Responsibilities:
-1. Read sensor JSON from Arduino over USB serial (sensor_module.ino).
-2. Push readings (temp, humidity, soil, lux, ppfd, dli, is_day) to Supabase.
-3. Poll Supabase for pending device_commands and drive GPIO relays:
-       Pump        -> GPIO 18 (BCM)
-       Fan         -> GPIO 23 (BCM)
-       Grow Light  -> GPIO 24 (BCM)
-4. Mark commands as 'executed' once the relay is switched.
+What it does
+------------
+1. Reads sensor JSON from the Arduino over USB serial (sensor_module.ino).
+2. Stores readings every PUSH_INTERVAL seconds in a local SQLite database.
+3. Exposes an HTTP API (Flask) that the dashboard polls directly:
+     GET  /api/status                   -> health + uptime
+     GET  /api/sensors                  -> latest reading + device states
+     GET  /api/history?hours=24         -> raw readings for the window
+     GET  /api/consumption?days=7       -> daily power (Wh) + water (L) totals
+     POST /api/irrigation/<on|off>      -> toggle pump  (GPIO 18)
+     POST /api/fan/<on|off>             -> toggle fan   (GPIO 23)
+     POST /api/grow_light/<on|off>      -> toggle light (GPIO 24)
 
-Auto-control logic (irrigation, fan, grow light) lives in the
-'check-irrigation' Supabase Edge Function, which queues commands here.
+Power model (assumed nameplate ratings)
+---------------------------------------
+   pump        =  5 W
+   fan         = 15 W
+   grow_light  =  5 W
+Wh accumulated per device = (W * seconds_on) / 3600
+
+Water model
+-----------
+   pump drips at 60 mL/s while ON
+   mL accumulated = 60 * seconds_on
+
+Run on the Pi
+-------------
+   cd ~/raspberry-pi
+   source venv/bin/activate
+   pip install flask flask-cors pyserial RPi.GPIO
+   python3 app.py
 """
 
 import os
+import sqlite3
+import threading
 import time
-import json
-import requests
-import RPi.GPIO as GPIO
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from contextlib import closing
 
-from serial_monitor import ArduinoSensor
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+
+# Optional hardware imports — fall back to a stub on a dev machine
+try:
+    import RPi.GPIO as GPIO
+    HAS_GPIO = True
+except Exception:
+    HAS_GPIO = False
+    print("[gpio] RPi.GPIO not available — running in MOCK mode")
+
+try:
+    from serial_monitor import ArduinoSensor
+    HAS_SERIAL = True
+except Exception as e:
+    HAS_SERIAL = False
+    print(f"[serial] serial_monitor unavailable ({e}) — running in MOCK mode")
+
 
 # ============================================================
-#  CONFIG — fill these in for your Pi
+#  CONFIG
 # ============================================================
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://skorxurbkdwfwgigegez.supabase.co")
+DB_PATH = os.environ.get("TERRAMONITOR_DB", os.path.join(os.path.dirname(__file__), "terramonitor.db"))
+HTTP_HOST = os.environ.get("TERRAMONITOR_HOST", "0.0.0.0")
+HTTP_PORT = int(os.environ.get("TERRAMONITOR_PORT", "5000"))
+PUSH_INTERVAL = 5  # seconds between sensor inserts
 
-# IMPORTANT: The Pi must use the SERVICE ROLE key to bypass RLS when writing
-# sensor_readings on behalf of the user. NEVER ship this key in the web app.
-# Get it from: Lovable Cloud -> Backend -> API keys -> service_role
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-# Fallback to anon (will fail RLS on insert — kept only so polling reads still work in dev)
-SUPABASE_ANON_KEY = os.environ.get(
-    "SUPABASE_ANON_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrb3J4dXJia2R3ZndnaWdlZ2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM1NzE5ODksImV4cCI6MjA3OTE0Nzk4OX0.l6ujyIyECylWfnqTRUszQhvPchXkYYNm4zm_ir2GtdI",
-)
-SUPABASE_KEY = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
-if not SUPABASE_SERVICE_KEY:
-    print("[warn] SUPABASE_SERVICE_ROLE_KEY not set — inserts will fail due to RLS!")
-
-USER_ID = os.environ.get("TERRAMONITOR_USER_ID", "d2b2193b-ecf1-4822-a071-be1e8a89a45d")
-
-# How often (seconds) to push readings and poll commands
-PUSH_INTERVAL = 5
-POLL_INTERVAL = 2
-
-# Soil ADC -> percentage calibration (from combined_sensors.ino)
-#   wet (lots of water)  ~ low ADC
-#   dry (no water)       ~ high ADC
+# Soil ADC -> percentage calibration
 SOIL_DRY_ADC = 600
 SOIL_WET_ADC = 280
 
-# ============================================================
-#  GPIO PIN MAP (BCM numbering)
-# ============================================================
-PIN_PUMP = 18        # Irrigation pump relay
-PIN_FAN = 23         # Ventilation fan relay
-PIN_GROW_LIGHT = 24  # Grow light relay
-
-DEVICE_PINS = {
-    "irrigation": PIN_PUMP,
-    "fan": PIN_FAN,
-    "grow_light": PIN_GROW_LIGHT,
-}
-
-# Most relay modules are ACTIVE-LOW (LOW = ON). Flip if yours is active-high.
+# GPIO pin map (BCM)
+PIN_PUMP = 18
+PIN_FAN = 23
+PIN_GROW_LIGHT = 24
+DEVICE_PINS = {"irrigation": PIN_PUMP, "fan": PIN_FAN, "grow_light": PIN_GROW_LIGHT}
 RELAY_ACTIVE_LOW = False
+
+# Power & water rates
+DEVICE_POWER_W = {"irrigation": 5.0, "fan": 15.0, "grow_light": 5.0}
+PUMP_FLOW_ML_PER_S = 60.0
+
+
+# ============================================================
+#  DATABASE
+# ============================================================
+DDL = """
+CREATE TABLE IF NOT EXISTS readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    temperature REAL,
+    humidity REAL,
+    soil_pct REAL,
+    soil_label TEXT,
+    lux REAL,
+    ppfd REAL,
+    dli REAL,
+    is_day INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_readings_ts ON readings(ts);
+
+CREATE TABLE IF NOT EXISTS device_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    device TEXT NOT NULL,
+    state INTEGER NOT NULL  -- 1 = on, 0 = off
+);
+CREATE INDEX IF NOT EXISTS idx_device_events_ts ON device_events(device, ts);
+"""
+
+_db_lock = threading.Lock()
+
+
+def db():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with closing(db()) as c:
+        c.executescript(DDL)
+        c.commit()
+    print(f"[db] ready at {DB_PATH}")
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ============================================================
+#  GPIO
+# ============================================================
+device_state = {"irrigation": False, "fan": False, "grow_light": False}
 
 
 def relay_write(pin: int, on: bool):
+    if not HAS_GPIO:
+        return
     if RELAY_ACTIVE_LOW:
         GPIO.output(pin, GPIO.LOW if on else GPIO.HIGH)
     else:
@@ -78,168 +147,302 @@ def relay_write(pin: int, on: bool):
 
 
 def setup_gpio():
+    if not HAS_GPIO:
+        return
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
     for pin in DEVICE_PINS.values():
         GPIO.setup(pin, GPIO.OUT)
-        relay_write(pin, False)  # default OFF
-    print(f"[gpio] Initialised pins {DEVICE_PINS} (active_low={RELAY_ACTIVE_LOW})")
+        relay_write(pin, False)
+    print(f"[gpio] init {DEVICE_PINS} (active_low={RELAY_ACTIVE_LOW})")
 
 
-# ============================================================
-#  Supabase REST helpers (PostgREST)
-# ============================================================
-def sb_headers():
-    return {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
-
-
-def push_reading(reading: dict):
-    """Insert one row into sensor_readings."""
-    soil_adc = reading.get("soil")
-    soil_pct = None
-    soil_label = "Unknown"
-    if isinstance(soil_adc, (int, float)):
-        # Map ADC to 0–100% (clamped)
-        rng = SOIL_DRY_ADC - SOIL_WET_ADC
-        if rng != 0:
-            pct = (SOIL_DRY_ADC - soil_adc) / rng * 100.0
-            soil_pct = max(0.0, min(100.0, round(pct, 1)))
-        if soil_adc < 330:
-            soil_label = "Wet"
-        elif soil_adc > 370:
-            soil_label = "Dry"
-        else:
-            soil_label = "Moist"
-
-    payload = {
-        "user_id": USER_ID,
-        "temperature": reading.get("temp"),
-        "humidity": reading.get("humidity", 0),  # DHT11 humidity if you add it; default 0
-        "soil_moisture": soil_label,
-        "soil_moisture_percentage": soil_pct,
-        "light_intensity": reading.get("lux"),
-        "lux": reading.get("lux"),
-        "ppfd": reading.get("ppfd"),
-        "dli": reading.get("dli"),
-        "is_day": bool(reading.get("is_day")) if reading.get("is_day") is not None else None,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-
-    try:
-        r = requests.post(
-            f"{SUPABASE_URL}/rest/v1/sensor_readings",
-            headers=sb_headers(),
-            data=json.dumps(payload),
-            timeout=10,
-        )
-        if r.status_code >= 300:
-            print(f"[push] failed {r.status_code}: {r.text}")
-        else:
-            print(f"[push] OK  T={payload['temperature']} soil={soil_label} dli={payload['dli']}")
-    except Exception as e:
-        print(f"[push] error: {e}")
-
-
-def fetch_pending_commands():
-    """Pull all pending device_commands for this user."""
-    try:
-        r = requests.get(
-            f"{SUPABASE_URL}/rest/v1/device_commands"
-            f"?user_id=eq.{USER_ID}&status=eq.pending"
-            f"&select=id,device,action,created_at&order=created_at.asc",
-            headers=sb_headers(),
-            timeout=10,
-        )
-        if r.status_code != 200:
-            print(f"[poll] failed {r.status_code}: {r.text}")
-            return []
-        return r.json() or []
-    except Exception as e:
-        print(f"[poll] error: {e}")
-        return []
-
-
-def mark_executed(command_id: str):
-    try:
-        r = requests.patch(
-            f"{SUPABASE_URL}/rest/v1/device_commands?id=eq.{command_id}",
-            headers=sb_headers(),
-            data=json.dumps({
-                "status": "executed",
-                "executed_at": datetime.now(timezone.utc).isoformat(),
-            }),
-            timeout=10,
-        )
-        if r.status_code >= 300:
-            print(f"[exec] mark failed {r.status_code}: {r.text}")
-    except Exception as e:
-        print(f"[exec] mark error: {e}")
-
-
-def execute_command(cmd: dict):
-    device = cmd.get("device")
-    action = cmd.get("action")
-    cmd_id = cmd.get("id")
-
+def set_device(device: str, on: bool):
     pin = DEVICE_PINS.get(device)
     if pin is None:
-        print(f"[exec] unknown device '{device}', skipping")
-        return
-
-    on = (action == "on")
+        raise ValueError(f"unknown device {device}")
+    if device_state[device] == on:
+        return False  # no change, no event logged
     relay_write(pin, on)
-    print(f"[exec] {device} -> {action.upper()} (GPIO {pin})")
-    mark_executed(cmd_id)
+    device_state[device] = on
+    with _db_lock, closing(db()) as c:
+        c.execute(
+            "INSERT INTO device_events (ts, device, state) VALUES (?, ?, ?)",
+            (now_iso(), device, 1 if on else 0),
+        )
+        c.commit()
+    print(f"[exec] {device} -> {'ON' if on else 'OFF'}")
+    return True
 
 
 # ============================================================
-#  Main loop
+#  SENSOR THREAD
 # ============================================================
-def main():
-    print("=== TerraMonitor Pi controller ===")
-    setup_gpio()
-    arduino = ArduinoSensor()
+latest_reading = {}
+
+
+def soil_to_pct_label(adc):
+    if not isinstance(adc, (int, float)):
+        return None, "Unknown"
+    rng = SOIL_DRY_ADC - SOIL_WET_ADC
+    pct = None
+    if rng:
+        pct = max(0.0, min(100.0, round((SOIL_DRY_ADC - adc) / rng * 100.0, 1)))
+    if adc < 330:
+        label = "Wet"
+    elif adc > 370:
+        label = "Dry"
+    else:
+        label = "Moist"
+    return pct, label
+
+
+def store_reading(r):
+    pct, label = soil_to_pct_label(r.get("soil"))
+    row = {
+        "ts": now_iso(),
+        "temperature": r.get("temp"),
+        "humidity": r.get("humidity", 0),
+        "soil_pct": pct,
+        "soil_label": label,
+        "lux": r.get("lux"),
+        "ppfd": r.get("ppfd"),
+        "dli": r.get("dli"),
+        "is_day": 1 if r.get("is_day") else 0 if r.get("is_day") is not None else None,
+    }
+    with _db_lock, closing(db()) as c:
+        c.execute(
+            "INSERT INTO readings (ts, temperature, humidity, soil_pct, soil_label, lux, ppfd, dli, is_day)"
+            " VALUES (:ts, :temperature, :humidity, :soil_pct, :soil_label, :lux, :ppfd, :dli, :is_day)",
+            row,
+        )
+        c.commit()
+    latest_reading.update(row)
+    print(f"[push] T={row['temperature']} H={row['humidity']} soil={label} dli={row['dli']}")
+
+
+def sensor_loop():
+    arduino = None
+    if HAS_SERIAL:
+        try:
+            arduino = ArduinoSensor()
+        except Exception as e:
+            print(f"[serial] init failed ({e}) — MOCK mode")
+            arduino = None
 
     last_push = 0
-    last_poll = 0
-    latest_reading = None
+    cached = None
+    while True:
+        try:
+            if arduino:
+                d = arduino.read()
+                if d:
+                    cached = d
+            else:
+                # MOCK: synthesize a reading so the dashboard has something
+                cached = {"temp": 22.5, "humidity": 55, "soil": 420, "lux": 800, "ppfd": 200, "dli": 12, "is_day": True}
 
-    try:
-        while True:
             now = time.time()
-
-            # Drain serial — keep newest reading
-            data = arduino.read()
-            if data:
-                latest_reading = data
-
-            # Push readings to cloud at PUSH_INTERVAL
-            if latest_reading and now - last_push >= PUSH_INTERVAL:
-                push_reading(latest_reading)
+            if cached and now - last_push >= PUSH_INTERVAL:
+                store_reading(cached)
                 last_push = now
+            time.sleep(0.2)
+        except Exception as e:
+            print(f"[sensor] error: {e}")
+            time.sleep(1)
 
-            # Poll commands at POLL_INTERVAL
-            if now - last_poll >= POLL_INTERVAL:
-                cmds = fetch_pending_commands()
-                for c in cmds:
-                    execute_command(c)
-                last_poll = now
 
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        print("\n[main] stopping...")
+# ============================================================
+#  CONSUMPTION CALCULATION
+# ============================================================
+def compute_consumption(days: int = 7):
+    """
+    Returns a list (length=days) of {date, power_wh, water_ml, by_device:{...}}
+    Walks device_events and accumulates ON-duration per local day.
+    Open intervals (still ON now) are closed at 'now'.
+    """
+    end = datetime.now(timezone.utc)
+    start = (end - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Pre-build day buckets keyed by local date string
+    buckets = {}
+    for i in range(days):
+        d = (start + timedelta(days=i)).date().isoformat()
+        buckets[d] = {
+            "date": d,
+            "power_wh": 0.0,
+            "water_ml": 0.0,
+            "by_device": {k: {"on_seconds": 0.0, "wh": 0.0} for k in DEVICE_PINS},
+        }
+
+    with closing(db()) as c:
+        # Pull all events from a bit before the window so we can detect
+        # devices that were already ON at window start.
+        rows = c.execute(
+            "SELECT ts, device, state FROM device_events"
+            " WHERE ts >= ? ORDER BY device, ts ASC",
+            ((start - timedelta(days=1)).isoformat(),),
+        ).fetchall()
+
+    # Group by device
+    by_dev = {k: [] for k in DEVICE_PINS}
+    for r in rows:
+        if r["device"] in by_dev:
+            by_dev[r["device"]].append((datetime.fromisoformat(r["ts"]), r["state"]))
+
+    for device, events in by_dev.items():
+        # Walk pairs (on -> off). If an ON has no OFF, close at 'now'.
+        on_at = None
+        for ts, state in events:
+            if state == 1 and on_at is None:
+                on_at = ts
+            elif state == 0 and on_at is not None:
+                _accumulate(buckets, device, on_at, ts, start, end)
+                on_at = None
+        if on_at is not None:
+            _accumulate(buckets, device, on_at, end, start, end)
+
+    # Round for clean JSON
+    out = []
+    for d in sorted(buckets):
+        b = buckets[d]
+        b["power_wh"] = round(b["power_wh"], 2)
+        b["water_ml"] = round(b["water_ml"], 1)
+        for dev in b["by_device"].values():
+            dev["on_seconds"] = round(dev["on_seconds"], 1)
+            dev["wh"] = round(dev["wh"], 2)
+        out.append(b)
+    return out
+
+
+def _accumulate(buckets, device, on_at, off_at, window_start, window_end):
+    """Split the [on_at, off_at) interval across day buckets within the window."""
+    a = max(on_at, window_start)
+    b = min(off_at, window_end)
+    if b <= a:
+        return
+    cursor = a
+    while cursor < b:
+        # End of this local day (UTC midnight boundary — keeps it simple)
+        day_end = (cursor.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
+        slice_end = min(day_end, b)
+        secs = (slice_end - cursor).total_seconds()
+        date_key = cursor.date().isoformat()
+        if date_key in buckets:
+            wh = DEVICE_POWER_W[device] * secs / 3600.0
+            buckets[date_key]["by_device"][device]["on_seconds"] += secs
+            buckets[date_key]["by_device"][device]["wh"] += wh
+            buckets[date_key]["power_wh"] += wh
+            if device == "irrigation":
+                buckets[date_key]["water_ml"] += PUMP_FLOW_ML_PER_S * secs
+        cursor = slice_end
+
+
+# ============================================================
+#  HTTP API
+# ============================================================
+app = Flask(__name__)
+CORS(app)
+START_TIME = time.time()
+
+
+@app.route("/api/status")
+def api_status():
+    return jsonify({
+        "status": "ok",
+        "uptime_s": int(time.time() - START_TIME),
+        "has_gpio": HAS_GPIO,
+        "has_serial": HAS_SERIAL,
+        "devices": device_state,
+    })
+
+
+@app.route("/api/sensors")
+def api_sensors():
+    if not latest_reading:
+        return jsonify({"ready": False, "devices": device_state})
+    return jsonify({
+        "ready": True,
+        "timestamp": latest_reading.get("ts"),
+        "temperature": latest_reading.get("temperature"),
+        "humidity": latest_reading.get("humidity"),
+        "soil_moisture": latest_reading.get("soil_label"),
+        "soil_moisture_percentage": latest_reading.get("soil_pct"),
+        "light_intensity": latest_reading.get("lux"),
+        "lux": latest_reading.get("lux"),
+        "ppfd": latest_reading.get("ppfd"),
+        "dli": latest_reading.get("dli"),
+        "is_day": bool(latest_reading.get("is_day")) if latest_reading.get("is_day") is not None else None,
+        "devices": device_state,
+    })
+
+
+@app.route("/api/history")
+def api_history():
+    hours = int(request.args.get("hours", 24))
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    with closing(db()) as c:
+        rows = c.execute(
+            "SELECT ts, temperature, humidity, soil_pct, soil_label, lux, ppfd, dli"
+            " FROM readings WHERE ts >= ? ORDER BY ts ASC",
+            (since,),
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/consumption")
+def api_consumption():
+    days = max(1, min(30, int(request.args.get("days", 7))))
+    return jsonify({
+        "days": days,
+        "power_w": DEVICE_POWER_W,
+        "pump_flow_ml_per_s": PUMP_FLOW_ML_PER_S,
+        "daily": compute_consumption(days),
+    })
+
+
+def _control(device, action):
+    if action not in ("on", "off"):
+        return jsonify({"error": "action must be on|off"}), 400
+    try:
+        changed = set_device(device, action == "on")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"status": "ok", "device": device, "action": action, "changed": changed})
+
+
+@app.route("/api/irrigation/<action>", methods=["POST"])
+def api_irrigation(action):
+    return _control("irrigation", action)
+
+
+@app.route("/api/fan/<action>", methods=["POST"])
+def api_fan(action):
+    return _control("fan", action)
+
+
+@app.route("/api/grow_light/<action>", methods=["POST"])
+def api_grow_light(action):
+    return _control("grow_light", action)
+
+
+# ============================================================
+#  MAIN
+# ============================================================
+def main():
+    print("=== TerraMonitor Pi (LOCAL) ===")
+    init_db()
+    setup_gpio()
+    t = threading.Thread(target=sensor_loop, daemon=True)
+    t.start()
+    try:
+        app.run(host=HTTP_HOST, port=HTTP_PORT, threaded=True)
     finally:
-        # Safe shutdown — turn everything OFF
-        for pin in DEVICE_PINS.values():
-            relay_write(pin, False)
-        GPIO.cleanup()
-        arduino.close()
-        print("[main] GPIO cleaned up, bye.")
+        if HAS_GPIO:
+            for pin in DEVICE_PINS.values():
+                relay_write(pin, False)
+            GPIO.cleanup()
+        print("[main] bye.")
 
 
 if __name__ == "__main__":

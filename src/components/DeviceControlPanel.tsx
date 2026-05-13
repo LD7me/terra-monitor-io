@@ -3,12 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Droplets, Fan, Power, Cloud, Loader2, Lightbulb } from "lucide-react";
 import { useDeviceControl } from "@/hooks/useDeviceControl";
+import type { SensorData } from "@/hooks/useSensorData";
 
 interface DeviceControlPanelProps {
-  sensorData: {
-    soilMoisture: string;
-    temperature: number;
-  };
+  sensorData: SensorData;
 }
 
 export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {

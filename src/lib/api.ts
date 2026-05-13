@@ -1,11 +1,44 @@
-// API utilities for connecting to Raspberry Pi Flask backend
+// HTTP client for the Raspberry Pi local Flask backend.
+// All data lives on the Pi (SQLite). Dashboard talks to it directly over HTTP.
 
 export interface SensorData {
+  ready?: boolean;
+  timestamp: string;
   temperature: number;
   humidity: number;
-  light_intensity: number | null;
   soil_moisture: string;
-  timestamp: string;
+  soil_moisture_percentage: number | null;
+  light_intensity: number | null;
+  lux: number | null;
+  ppfd: number | null;
+  dli: number | null;
+  is_day: boolean | null;
+  devices: { irrigation: boolean; fan: boolean; grow_light: boolean };
+}
+
+export interface HistoryRow {
+  ts: string;
+  temperature: number | null;
+  humidity: number | null;
+  soil_pct: number | null;
+  soil_label: string | null;
+  lux: number | null;
+  ppfd: number | null;
+  dli: number | null;
+}
+
+export interface ConsumptionDay {
+  date: string;
+  power_wh: number;
+  water_ml: number;
+  by_device: Record<string, { on_seconds: number; wh: number }>;
+}
+
+export interface ConsumptionResponse {
+  days: number;
+  power_w: Record<string, number>;
+  pump_flow_ml_per_s: number;
+  daily: ConsumptionDay[];
 }
 
 export interface SystemConfig {
@@ -13,103 +46,47 @@ export interface SystemConfig {
   apiPort: string;
 }
 
-// Get saved configuration from localStorage
-export const getSystemConfig = (): SystemConfig | null => {
-  const config = localStorage.getItem('terramonitor_config');
-  return config ? JSON.parse(config) : null;
+const STORAGE_KEY = 'terramonitor_config';
+
+export const getSystemConfig = (): SystemConfig => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) return JSON.parse(raw);
+  return { piAddress: 'raspberrypi.local', apiPort: '5000' };
 };
 
-// Save configuration to localStorage
 export const saveSystemConfig = (config: SystemConfig): void => {
-  localStorage.setItem('terramonitor_config', JSON.stringify(config));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 };
 
-// Build API URL
-const buildApiUrl = (endpoint: string): string => {
-  const config = getSystemConfig();
-  if (!config) {
-    throw new Error('System not configured. Please set your Raspberry Pi IP address.');
-  }
-  return `http://${config.piAddress}:${config.apiPort}${endpoint}`;
+const buildUrl = (endpoint: string): string => {
+  const { piAddress, apiPort } = getSystemConfig();
+  return `http://${piAddress}:${apiPort}${endpoint}`;
 };
 
-// Fetch sensor data from Raspberry Pi
-export const fetchSensorData = async (): Promise<SensorData> => {
-  try {
-    const response = await fetch(buildApiUrl('/api/sensors'), {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching sensor data:', error);
-    throw error;
-  }
+const request = async <T>(endpoint: string, init?: RequestInit): Promise<T> => {
+  const res = await fetch(buildUrl(endpoint), {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<T>;
 };
 
-// Control irrigation system
-export const controlIrrigation = async (action: 'on' | 'off'): Promise<{ status: string; message: string }> => {
-  try {
-    const response = await fetch(buildApiUrl(`/api/irrigation/${action}`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+export const fetchSensorData = () => request<SensorData>('/api/sensors');
+export const fetchHistory = (hours = 24) => request<HistoryRow[]>(`/api/history?hours=${hours}`);
+export const fetchConsumption = (days = 7) => request<ConsumptionResponse>(`/api/consumption?days=${days}`);
+export const fetchStatus = () => request<{ status: string; uptime_s: number; devices: any }>('/api/status');
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+export const controlDevice = (
+  device: 'irrigation' | 'fan' | 'grow_light',
+  action: 'on' | 'off',
+) => request<{ status: string }>(`/api/${device}/${action}`, { method: 'POST' });
 
-    return await response.json();
-  } catch (error) {
-    console.error('Error controlling irrigation:', error);
-    throw error;
-  }
-};
-
-// Control fan system
-export const controlFan = async (action: 'on' | 'off'): Promise<{ status: string; message: string }> => {
-  try {
-    const response = await fetch(buildApiUrl(`/api/fan/${action}`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error controlling fan:', error);
-    throw error;
-  }
-};
-
-// Test connection to Raspberry Pi
 export const testConnection = async (): Promise<boolean> => {
   try {
-    const config = getSystemConfig();
-    if (!config) return false;
-
-    const response = await fetch(buildApiUrl('/api/status'), {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
-
-    return response.ok;
-  } catch (error) {
-    console.error('Connection test failed:', error);
+    const res = await fetch(buildUrl('/api/status'), { signal: AbortSignal.timeout(4000) });
+    return res.ok;
+  } catch {
     return false;
   }
 };
