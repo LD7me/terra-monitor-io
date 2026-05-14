@@ -174,6 +174,25 @@ def set_device(device: str, on: bool):
     print(f"[exec] {device} -> {'ON' if on else 'OFF'}")
     return True
 
+# ============================================================
+#  AUTOMATION THRESHOLDS
+# ============================================================
+TEMP_ON = 30.0
+TEMP_OFF = 25.0
+
+# Note: Your Arduino code treats < 330 as Dry, while your Python config 
+# previously treated 600 as Dry. I am matching your Arduino logic here.
+SOIL_DRY_ADC_ON = 330
+SOIL_WET_ADC_OFF = 370
+
+DLI_THRESHOLD = 14.0
+GROW_LIGHT_DURATION_S = 2 * 60 * 60  # 2 hours in seconds
+
+# State trackers for logic that relies on time or previous states
+auto_state = {
+    "was_day": None,
+    "grow_light_start": 0
+}
 
 # ============================================================
 #  SENSOR THREAD
@@ -220,6 +239,53 @@ def store_reading(r):
     latest_reading.update(row)
     print(f"[push] T={row['temperature']} H={row['humidity']} soil={label} dli={row['dli']}")
 
+def evaluate_auto_logic(reading):
+    """Evaluates sensor thresholds and triggers relays if needed."""
+    temp = reading.get("temp")
+    adc = reading.get("soil")
+    is_day = reading.get("is_day")
+    dli = reading.get("dli")
+    
+    now = time.time()
+
+    # --- 1. FAN & TEMP CONTROL ---
+    if temp is not None:
+        if temp > TEMP_ON and not device_state["irrigation"]:
+            # Turn fan ON, force pump OFF (matching Arduino safety logic)
+            set_device("fan", True)
+            set_device("irrigation", False)
+        elif temp < TEMP_OFF and device_state["fan"]:
+            # Turn fan OFF
+            set_device("fan", False)
+
+    # --- 2. SOIL & PUMP CONTROL ---
+    if adc is not None:
+        if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
+            set_device("irrigation", True)
+        elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
+            set_device("irrigation", False)
+
+    # --- 3. GROW LIGHT (Sunset Event & DLI) ---
+    if is_day is not None:
+        # Detect the exact moment of sunset (transition from True to False)
+        if auto_state["was_day"] is True and is_day is False:
+            if dli is not None and dli < DLI_THRESHOLD:
+                print(f"[auto] Sunset detected. DLI ({dli}) < {DLI_THRESHOLD}. Grow light ON.")
+                set_device("grow_light", True)
+                auto_state["grow_light_start"] = now
+            else:
+                print(f"[auto] Sunset detected. DLI ({dli}) sufficient. No light needed.")
+        
+        # Update day state for the next loop
+        auto_state["was_day"] = is_day
+
+    # --- 4. GROW LIGHT TIMER ---
+    # If the light is on AND it was started by the auto-logic timer
+    if device_state["grow_light"] and auto_state["grow_light_start"] > 0:
+        if now - auto_state["grow_light_start"] >= GROW_LIGHT_DURATION_S:
+            print("[auto] 2-hour grow light cycle complete. OFF.")
+            set_device("grow_light", False)
+            auto_state["grow_light_start"] = 0  # Reset timer
 
 def sensor_loop():
     arduino = None
@@ -243,9 +309,16 @@ def sensor_loop():
                 cached = {"temp": 22.5, "humidity": 55, "soil": 420, "lux": 800, "ppfd": 200, "dli": 12, "is_day": True}
 
             now = time.time()
-            if cached and now - last_push >= PUSH_INTERVAL:
-                store_reading(cached)
-                last_push = now
+            
+            if cached:
+                # 1. Run the automatic thresholds
+                evaluate_auto_logic(cached)
+                
+                # 2. Push to database at the requested interval
+                if now - last_push >= PUSH_INTERVAL:
+                    store_reading(cached)
+                    last_push = now
+                    
             time.sleep(0.2)
         except Exception as e:
             print(f"[sensor] error: {e}")
