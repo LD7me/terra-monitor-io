@@ -106,10 +106,21 @@ CREATE TABLE IF NOT EXISTS device_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL,
     device TEXT NOT NULL,
-    state INTEGER NOT NULL  -- 1 = on, 0 = off
+    state INTEGER NOT NULL,  -- 1 = on, 0 = off
+    reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_device_events_ts ON device_events(device, ts);
 """
+
+
+def _ensure_reason_column():
+    """Add `reason` column to device_events if upgrading from an older schema."""
+    with closing(db()) as c:
+        cols = [r["name"] for r in c.execute("PRAGMA table_info(device_events)").fetchall()]
+        if "reason" not in cols:
+            c.execute("ALTER TABLE device_events ADD COLUMN reason TEXT")
+            c.commit()
+            print("[db] migrated device_events: +reason")
 
 _db_lock = threading.Lock()
 
@@ -124,6 +135,7 @@ def init_db():
     with closing(db()) as c:
         c.executescript(DDL)
         c.commit()
+    _ensure_reason_column()
     print(f"[db] ready at {DB_PATH}")
 
 
@@ -157,7 +169,7 @@ def setup_gpio():
     print(f"[gpio] init {DEVICE_PINS} (active_low={RELAY_ACTIVE_LOW})")
 
 
-def set_device(device: str, on: bool):
+def set_device(device: str, on: bool, reason: str = "auto"):
     pin = DEVICE_PINS.get(device)
     if pin is None:
         raise ValueError(f"unknown device {device}")
@@ -167,11 +179,11 @@ def set_device(device: str, on: bool):
     device_state[device] = on
     with _db_lock, closing(db()) as c:
         c.execute(
-            "INSERT INTO device_events (ts, device, state) VALUES (?, ?, ?)",
-            (now_iso(), device, 1 if on else 0),
+            "INSERT INTO device_events (ts, device, state, reason) VALUES (?, ?, ?, ?)",
+            (now_iso(), device, 1 if on else 0, reason),
         )
         c.commit()
-    print(f"[exec] {device} -> {'ON' if on else 'OFF'}")
+    print(f"[exec] {device} -> {'ON' if on else 'OFF'} ({reason})")
     return True
 
 # ============================================================
@@ -285,11 +297,11 @@ def evaluate_auto_logic(reading):
 
         if not overrides["fan"]:
             if temp > TEMP_ON and not device_state["irrigation"]:
-                set_device("fan", True)
+                set_device("fan", True, reason="auto:temp_high")
                 if not overrides["irrigation"]:
-                    set_device("irrigation", False)
+                    set_device("irrigation", False, reason="auto:pump_priority")
             elif temp < TEMP_OFF and device_state["fan"]:
-                set_device("fan", False)
+                set_device("fan", False, reason="auto:temp_low")
 
     # --- 2. SOIL & PUMP CONTROL ---
     if adc is not None:
@@ -301,9 +313,9 @@ def evaluate_auto_logic(reading):
 
         if not overrides["irrigation"]:
             if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
-                set_device("irrigation", True)
+                set_device("irrigation", True, reason="auto:soil_dry")
             elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
-                set_device("irrigation", False)
+                set_device("irrigation", False, reason="auto:soil_wet")
 
     # --- 3. GROW LIGHT (Sunset Event & Tracking) ---
     if is_day is not None:
@@ -324,7 +336,7 @@ def evaluate_auto_logic(reading):
                     duration_s = hours_needed * 3600
 
                     print(f"[auto] Sunset evaluated. Peak Daytime DLI={final_dli:.2f}, Light ON for {hours_needed:.2f}h")
-                    set_device("grow_light", True)
+                    set_device("grow_light", True, reason="auto:dli_low")
                     auto_state["grow_light_start"] = now
                     auto_state["grow_light_duration"] = duration_s
                 else:
@@ -344,7 +356,7 @@ def evaluate_auto_logic(reading):
             elapsed = now - auto_state["grow_light_start"]
             if elapsed >= auto_state["grow_light_duration"]:
                 print("[auto] Dynamic grow light cycle complete. OFF.")
-                set_device("grow_light", False)
+                set_device("grow_light", False, reason="auto:timer_done")
                 auto_state["grow_light_start"] = 0
                 auto_state["grow_light_duration"] = 0
                 
@@ -494,6 +506,15 @@ def api_status():
     })
 
 
+def _last_irrigation_ts():
+    with closing(db()) as c:
+        row = c.execute(
+            "SELECT ts FROM device_events WHERE device='irrigation' AND state=1"
+            " ORDER BY ts DESC LIMIT 1"
+        ).fetchone()
+    return row["ts"] if row else None
+
+
 @app.route("/api/sensors")
 def api_sensors():
     if not latest_reading:
@@ -510,8 +531,21 @@ def api_sensors():
         "ppfd": latest_reading.get("ppfd"),
         "dli": latest_reading.get("dli"),
         "is_day": bool(latest_reading.get("is_day")) if latest_reading.get("is_day") is not None else None,
+        "last_irrigation": _last_irrigation_ts(),
         "devices": device_state,
     })
+
+
+@app.route("/api/events")
+def api_events():
+    limit = max(1, min(500, int(request.args.get("limit", 50))))
+    with closing(db()) as c:
+        rows = c.execute(
+            "SELECT ts, device, state, reason FROM device_events"
+            " ORDER BY ts DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 @app.route("/api/history")
@@ -542,12 +576,12 @@ def _control(device, action):
     if action not in ("on", "off"):
         return jsonify({"error": "action must be on|off"}), 400
     try:
-        changed = set_device(device, action == "on")
-        
+        changed = set_device(device, action == "on", reason="manual")
+
         # Engage a hard manual override lock
         auto_state["overrides"][device] = True
         print(f"[manual] {device} is now LOCKED in manual mode")
-        
+
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"status": "ok", "device": device, "action": action, "changed": changed})
