@@ -5,13 +5,13 @@ export interface SensorData {
   temperature: number;
   humidity: number;
   soilMoisture: string;
-  soilMoisturePercentage: number | null;
   lightIntensity: number | null;
   lux: number | null;
   ppfd: number | null;
   dli: number | null;
   isDay: boolean | null;
   timestamp: string;
+  lastIrrigationAt: string | null;
   devices: { irrigation: boolean; fan: boolean; grow_light: boolean };
 }
 
@@ -19,13 +19,13 @@ const initial: SensorData = {
   temperature: 0,
   humidity: 0,
   soilMoisture: 'Unknown',
-  soilMoisturePercentage: null,
   lightIntensity: null,
   lux: null,
   ppfd: null,
   dli: null,
   isDay: null,
   timestamp: new Date().toISOString(),
+  lastIrrigationAt: null,
   devices: { irrigation: false, fan: false, grow_light: false },
 };
 
@@ -49,13 +49,13 @@ export function useSensorData(pollMs = 5000) {
           temperature: d.temperature ?? 0,
           humidity: d.humidity ?? 0,
           soilMoisture: d.soil_moisture ?? 'Unknown',
-          soilMoisturePercentage: d.soil_moisture_percentage,
           lightIntensity: d.light_intensity,
           lux: d.lux,
           ppfd: d.ppfd,
           dli: d.dli,
           isDay: d.is_day,
           timestamp: d.timestamp,
+          lastIrrigationAt: (d as any).last_irrigation ?? null,
           devices: d.devices ?? initial.devices,
         });
         setIsConnected(true);

@@ -13,18 +13,8 @@ export interface SensorData {
   ppfd: number | null;
   dli: number | null;
   is_day: boolean | null;
+  last_irrigation: string | null;
   devices: { irrigation: boolean; fan: boolean; grow_light: boolean };
-}
-
-export interface HistoryRow {
-  ts: string;
-  temperature: number | null;
-  humidity: number | null;
-  soil_pct: number | null;
-  soil_label: string | null;
-  lux: number | null;
-  ppfd: number | null;
-  dli: number | null;
 }
 
 export interface ConsumptionDay {
@@ -39,6 +29,13 @@ export interface ConsumptionResponse {
   power_w: Record<string, number>;
   pump_flow_ml_per_s: number;
   daily: ConsumptionDay[];
+}
+
+export interface DeviceEvent {
+  ts: string;
+  device: 'irrigation' | 'fan' | 'grow_light' | string;
+  state: 0 | 1;
+  reason: string | null;
 }
 
 export interface SystemConfig {
@@ -73,8 +70,8 @@ const request = async <T>(endpoint: string, init?: RequestInit): Promise<T> => {
 };
 
 export const fetchSensorData = () => request<SensorData>('/api/sensors');
-export const fetchHistory = (hours = 24) => request<HistoryRow[]>(`/api/history?hours=${hours}`);
 export const fetchConsumption = (days = 7) => request<ConsumptionResponse>(`/api/consumption?days=${days}`);
+export const fetchEvents = (limit = 50) => request<DeviceEvent[]>(`/api/events?limit=${limit}`);
 export const fetchStatus = () => request<{ status: string; uptime_s: number; devices: any }>('/api/status');
 
 export const controlDevice = (
