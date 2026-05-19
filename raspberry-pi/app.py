@@ -190,15 +190,15 @@ GROW_LIGHT_DURATION_S = 2 * 60 * 60  # 2 hours in seconds
 EFFECTIVE_LED_PPFD = 150          # estimated effective PPFD
 LED_DLI_PER_HOUR = (EFFECTIVE_LED_PPFD * 3600) / 1_000_000
 
-MANUAL_OVERRIDE_DURATION_S = 300  # 5 minutes (adjust for your testing needs)
-
 auto_state = {
     "was_day": None,
     "grow_light_start": 0,
+    "grow_light_duration": 0,
+    "daytime_max_dli": 0.0,       # Captures the highest DLI before Arduino wipes it
     "overrides": {
-        "irrigation": 0,
-        "fan": 0,
-        "grow_light": 0
+        "irrigation": False,      # True means manually locked
+        "fan": False,
+        "grow_light": False
     }
 }
 
@@ -248,7 +248,7 @@ def store_reading(r):
     print(f"[push] T={row['temperature']} H={row['humidity']} soil={label} dli={row['dli']}")
 
 def evaluate_auto_logic(reading):
-    """Evaluates sensor thresholds and triggers relays if needed."""
+    """Evaluates sensor thresholds with infinite manual override support."""
     temp = reading.get("temp")
     adc = reading.get("soil")
     is_day = reading.get("is_day")
@@ -257,72 +257,97 @@ def evaluate_auto_logic(reading):
     now = time.time()
     overrides = auto_state["overrides"]
 
+    # --- 0. LIVE DLI CACHING ---
+    # While it is daytime, store the highest DLI seen so we don't lose it when Arduino resets
+    if is_day is True and dli is not None:
+        if dli > auto_state["daytime_max_dli"]:
+            auto_state["daytime_max_dli"] = dli
+
     # --- 1. FAN & TEMP CONTROL ---
-    if temp is not None and (now - overrides["fan"] > MANUAL_OVERRIDE_DURATION_S):
-        if temp > TEMP_ON and not device_state["irrigation"]:
-            set_device("fan", True)
-            if now - overrides["irrigation"] > MANUAL_OVERRIDE_DURATION_S:
-                set_device("irrigation", False)
-        elif temp < TEMP_OFF and device_state["fan"]:
-            set_device("fan", False)
+    if temp is not None:
+        # Release the override lock naturally if the environment matches auto rules
+        if overrides["fan"]:
+            if temp > TEMP_ON and device_state["fan"]:
+                overrides["fan"] = False  # Auto wants it ON anyway, hand control back
+            elif temp < TEMP_OFF and not device_state["fan"]:
+                overrides["fan"] = False  # Auto wants it OFF anyway, hand control back
+
+        # Run auto-policing ONLY if user hasn't locked the device manually
+        if not overrides["fan"]:
+            if temp > TEMP_ON and not device_state["irrigation"]:
+                set_device("fan", True)
+                if not overrides["irrigation"]:
+                    set_device("irrigation", False)
+            elif temp < TEMP_OFF and device_state["fan"]:
+                set_device("fan", False)
 
     # --- 2. SOIL & PUMP CONTROL ---
-    if adc is not None and (now - overrides["irrigation"] > MANUAL_OVERRIDE_DURATION_S):
-        # Restored your original rule: Pump can ONLY run if fan is completely OFF
-        if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
-            set_device("irrigation", True)
-        elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
-            set_device("irrigation", False)
+    if adc is not None:
+        # Release pump override lock naturally
+        if overrides["irrigation"]:
+            if adc < SOIL_DRY_ADC_ON and device_state["irrigation"]:
+                overrides["irrigation"] = False
+            elif adc > SOIL_WET_ADC_OFF and not device_state["irrigation"]:
+                overrides["irrigation"] = False
 
-    # --- 3. GROW LIGHT (Sunset Event & Fallback Evaluation) ---
-    if is_day is not None and (now - overrides["grow_light"] > MANUAL_OVERRIDE_DURATION_S):
-        
-        # Check 1: Exact Sunset Transition Edge (True -> False)
-        is_sunset_moment = (auto_state["was_day"] is True and is_day is False)
-        
-        # Check 2: Fallback State (It's night, script just started, and light hasn't run yet)
-        is_night_fallback = (is_day is False and auto_state["was_day"] is None and auto_state["grow_light_start"] == 0)
+        if not overrides["irrigation"]:
+            if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
+                set_device("irrigation", True)
+            elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
+                set_device("irrigation", False)
 
-        if (is_sunset_moment or is_night_fallback) and not device_state["grow_light"]:
-            if dli is not None and dli < DLI_THRESHOLD:
-                missing_dli = DLI_THRESHOLD - dli
-                hours_needed = (missing_dli / LED_DLI_PER_HOUR) * 1.2
-                hours_needed = max(0.5, min(hours_needed, 4.0))
-                duration_s = hours_needed * 3600
+    # --- 3. GROW LIGHT (Sunset Event & Tracking) ---
+    if is_day is not None:
+        # Release grow light lock on sunrise
+        if overrides["grow_light"] and is_day is True and not device_state["grow_light"]:
+            overrides["grow_light"] = False
 
-                print(
-                    f"[auto] Light Trigger Active. "
-                    f"DLI={dli:.2f}, Missing={missing_dli:.2f}, "
-                    f"Light ON for {hours_needed:.2f} h"
-                )
+        if not overrides["grow_light"]:
+            # State-focused transition checks
+            is_sunset = (auto_state["was_day"] is True and is_day is False)
+            is_night_fallback = (is_day is False and auto_state["was_day"] is None and auto_state["grow_light_start"] == 0)
 
-                set_device("grow_light", True)
-                auto_state["grow_light_start"] = now
-                auto_state["grow_light_duration"] = duration_s
-            else:
-                print(f"[auto] Night environment evaluated. DLI sufficient ({dli:.2f} >= {DLI_THRESHOLD}).")
-                auto_state["grow_light_start"] = -1 
+            if (is_sunset or is_night_fallback) and not device_state["grow_light"]:
+                # Use our cached maximum daytime DLI value before it was wiped out
+                final_dli = auto_state["daytime_max_dli"] if auto_state["daytime_max_dli"] > 0 else (dli or 0)
+                
+                if final_dli < DLI_THRESHOLD:
+                    missing_dli = DLI_THRESHOLD - final_dli
+                    hours_needed = (missing_dli / LED_DLI_PER_HOUR) * 1.2
+                    hours_needed = max(0.5, min(hours_needed, 4.0))
+                    duration_s = hours_needed * 3600
 
-    # Always capture history state 
+                    print(f"[auto] Sunset evaluated. Peak Daytime DLI={final_dli:.2f}, Light ON for {hours_needed:.2f}h")
+                    set_device("grow_light", True)
+                    auto_state["grow_light_start"] = now
+                    auto_state["grow_light_duration"] = duration_s
+                else:
+                    print(f"[auto] Sunset evaluated. Peak Daytime DLI={final_dli:.2f} is sufficient.")
+                    auto_state["grow_light_start"] = -1  # Dummy tracker to prevent print spam
+
+    # Keep track of history state frame-by-frame
     if is_day is not None:
         auto_state["was_day"] = is_day
 
     # --- 4. GROW LIGHT TIMER ---
-    if (
-        device_state["grow_light"]
-        and auto_state["grow_light_start"] > 0
-        and (now - overrides["grow_light"] > MANUAL_OVERRIDE_DURATION_S)
-    ):
-        elapsed = now - auto_state["grow_light_start"]
-        if elapsed >= auto_state["grow_light_duration"]:
-            print("[auto] Grow light cycle complete. OFF.")
-            set_device("grow_light", False)
+    if device_state["grow_light"] and auto_state["grow_light_start"] > 0:
+        # If the user overrides the light to OFF during an auto-cycle, cancel the active timer
+        if overrides["grow_light"]:
             auto_state["grow_light_start"] = 0
             auto_state["grow_light_duration"] = 0
-            
-    # Reset the dummy fallback print tracker when day returns
-    if is_day is True and auto_state["grow_light_start"] == -1:
-        auto_state["grow_light_start"] = 0
+        else:
+            elapsed = now - auto_state["grow_light_start"]
+            if elapsed >= auto_state["grow_light_duration"]:
+                print("[auto] Dynamic grow light cycle complete. OFF.")
+                set_device("grow_light", False)
+                auto_state["grow_light_start"] = 0
+                auto_state["grow_light_duration"] = 0
+
+    # Reset DLI max cache and dummy markers when daylight returns
+    if is_day is True:
+        auto_state["daytime_max_dli"] = 0.0
+        if auto_state["grow_light_start"] == -1:
+            auto_state["grow_light_start"] = 0
 
 def sensor_loop():
     arduino = None
@@ -517,9 +542,9 @@ def _control(device, action):
     try:
         changed = set_device(device, action == "on")
         
-        # RECORD THE OVERRIDE TIMESTAMP HERE
-        auto_state["overrides"][device] = time.time()
-        print(f"[manual] {device} overridden for {MANUAL_OVERRIDE_DURATION_S}s")
+        # Engage a hard manual override lock
+        auto_state["overrides"][device] = True
+        print(f"[manual] {device} is now LOCKED in manual mode")
         
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
