@@ -252,27 +252,25 @@ def evaluate_auto_logic(reading):
     temp = reading.get("temp")
     adc = reading.get("soil")
     
-    # FIX 1: Arduino doesn't send "is_day" over serial, only lux!
-    # We must calculate it ourselves so the sunset logic actually fires.
-    lux = reading.get("lux")
-    is_day = reading.get("is_day")
-    if is_day is None and lux is not None:
-        is_day = lux > 50  # 50 lux is your sunriseThreshold
+    # FIX: Parse Arduino integers (1/0) into strict Python booleans (True/False)
+    is_day_raw = reading.get("is_day")
+    is_day = None
+    if is_day_raw is not None:
+        is_day = True if is_day_raw in (1, True, "1") else False
         
     dli = reading.get("dli")
-    
     now = time.time()
     overrides = auto_state["overrides"]
 
     # --- 0. DAY/NIGHT TRANSITIONS & DLI CACHING ---
     if is_day is not None:
-        # FIX 2: Sunrise Edge (Only reset variables the EXACT moment day starts)
+        # Sunrise Edge (Only reset variables the EXACT moment day starts)
         if auto_state["was_day"] is False and is_day is True:
             auto_state["daytime_max_dli"] = 0.0
             if auto_state["grow_light_start"] == -1:
                 auto_state["grow_light_start"] = 0
                 
-        # Live Caching: track the highest DLI seen today before Arduino resets it
+        # Live Caching: track highest DLI before Arduino wipes it at night
         if is_day is True and dli is not None:
             if dli > auto_state["daytime_max_dli"]:
                 auto_state["daytime_max_dli"] = dli
@@ -309,7 +307,6 @@ def evaluate_auto_logic(reading):
 
     # --- 3. GROW LIGHT (Sunset Event & Tracking) ---
     if is_day is not None:
-        # Release grow light lock on sunrise
         if overrides["grow_light"] and is_day is True and not device_state["grow_light"]:
             overrides["grow_light"] = False
 
@@ -350,31 +347,7 @@ def evaluate_auto_logic(reading):
                 set_device("grow_light", False)
                 auto_state["grow_light_start"] = 0
                 auto_state["grow_light_duration"] = 0
-
-    # Keep track of history state frame-by-frame
-    if is_day is not None:
-        auto_state["was_day"] = is_day
-
-    # --- 4. GROW LIGHT TIMER ---
-    if device_state["grow_light"] and auto_state["grow_light_start"] > 0:
-        # If the user overrides the light to OFF during an auto-cycle, cancel the active timer
-        if overrides["grow_light"]:
-            auto_state["grow_light_start"] = 0
-            auto_state["grow_light_duration"] = 0
-        else:
-            elapsed = now - auto_state["grow_light_start"]
-            if elapsed >= auto_state["grow_light_duration"]:
-                print("[auto] Dynamic grow light cycle complete. OFF.")
-                set_device("grow_light", False)
-                auto_state["grow_light_start"] = 0
-                auto_state["grow_light_duration"] = 0
-
-    # Reset DLI max cache and dummy markers when daylight returns
-    if is_day is True:
-        auto_state["daytime_max_dli"] = 0.0
-        if auto_state["grow_light_start"] == -1:
-            auto_state["grow_light_start"] = 0
-
+                
 def sensor_loop():
     arduino = None
     if HAS_SERIAL:
@@ -385,13 +358,16 @@ def sensor_loop():
             arduino = None
 
     last_push = 0
-    cached = None
+    cached = {}  # Start as an empty dictionary
+    
     while True:
         try:
             if arduino:
                 d = arduino.read()
                 if d:
-                    cached = d
+                    # THE FIX: Update the dictionary instead of replacing it!
+                    # This keeps the 1-minute lux readings alive while temp updates rapidly.
+                    cached.update(d)
             else:
                 # MOCK: synthesize a reading so the dashboard has something
                 cached = {"temp": 22.5, "humidity": 55, "soil": 420, "lux": 800, "ppfd": 200, "dli": 12, "is_day": True}
