@@ -315,31 +315,31 @@ def evaluate_auto_logic(reading):
     # --- 1. FAN & TEMP CONTROL ---
     if temp is not None:
         if overrides["fan"]:
-            if temp > TEMP_ON and device_state["fan"]:
+            if temp > SETTINGS["TEMP_ON"] and device_state["fan"]:
                 overrides["fan"] = False
-            elif temp < TEMP_OFF and not device_state["fan"]:
+            elif temp < SETTINGS["TEMP_OFF"] and not device_state["fan"]:
                 overrides["fan"] = False
 
         if not overrides["fan"]:
-            if temp > TEMP_ON and not device_state["irrigation"]:
+            if temp > SETTINGS["TEMP_ON"] and not device_state["irrigation"]:
                 set_device("fan", True, reason="auto:temp_high")
                 if not overrides["irrigation"]:
                     set_device("irrigation", False, reason="auto:pump_priority")
-            elif temp < TEMP_OFF and device_state["fan"]:
+            elif temp < SETTINGS["TEMP_OFF"] and device_state["fan"]:
                 set_device("fan", False, reason="auto:temp_low")
 
     # --- 2. SOIL & PUMP CONTROL ---
     if adc is not None:
         if overrides["irrigation"]:
-            if adc < SOIL_DRY_ADC_ON and device_state["irrigation"]:
+            if adc < SETTINGS["SOIL_DRY_ADC_ON"] and device_state["irrigation"]:
                 overrides["irrigation"] = False
-            elif adc > SOIL_WET_ADC_OFF and not device_state["irrigation"]:
+            elif adc > SETTINGS["SOIL_WET_ADC_OFF"] and not device_state["irrigation"]:
                 overrides["irrigation"] = False
 
         if not overrides["irrigation"]:
-            if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
+            if adc < SETTINGS["SOIL_DRY_ADC_ON"] and not device_state["irrigation"] and not device_state["fan"]:
                 set_device("irrigation", True, reason="auto:soil_dry")
-            elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
+            elif adc > SETTINGS["SOIL_WET_ADC_OFF"] and device_state["irrigation"]:
                 set_device("irrigation", False, reason="auto:soil_wet")
 
     # --- 3. GROW LIGHT (Sunset Event & Tracking) ---
@@ -354,8 +354,8 @@ def evaluate_auto_logic(reading):
             if (is_sunset or is_night_fallback) and not device_state["grow_light"]:
                 final_dli = auto_state["daytime_max_dli"] if auto_state["daytime_max_dli"] > 0 else (dli or 0)
                 
-                if final_dli < DLI_THRESHOLD:
-                    missing_dli = DLI_THRESHOLD - final_dli
+                if final_dli < SETTINGS["DLI_THRESHOLD"]:
+                    missing_dli = SETTINGS["DLI_THRESHOLD"] - final_dli
                     hours_needed = (missing_dli / LED_DLI_PER_HOUR) * 1.2
                     hours_needed = max(0.5, min(hours_needed, 4.0))
                     duration_s = hours_needed * 3600
