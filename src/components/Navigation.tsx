@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Leaf, Activity, Menu } from "lucide-react";
+import { Leaf, Activity, Menu, Sliders } from "lucide-react";
 
 const Navigation = () => {
   const location = useLocation();
@@ -13,6 +13,7 @@ const Navigation = () => {
   const navItems = [
     { path: "/", icon: Leaf, label: "Home" },
     { path: "/dashboard", icon: Activity, label: "Dashboard" },
+    { path: "/settings", icon: Sliders, label: "Setpoints" },
   ];
 
   return (
