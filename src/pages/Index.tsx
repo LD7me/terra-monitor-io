@@ -33,7 +33,7 @@ const Index = () => {
                 Open Dashboard
               </Button>
             </Link>
-            <Button
+            {/* <Button
               variant="outline"
               size="lg"
               className="gap-2"
@@ -45,18 +45,18 @@ const Index = () => {
             >
               <Download className="h-5 w-5" />
               Pi Setup Files
-            </Button>
+            </Button> */}
           </div>
 
           <p className="text-xs text-muted-foreground mt-6">
-            Setup & API docs are in <code className="bg-muted px-1.5 py-0.5 rounded">README.md</code>
+            Setup & API docs are in the<code className="bg-muted px-1.5 py-0.5 rounded"><a href="https://github.com/LD7me/terra-monitor-io">github repo</a></code>
           </p>
         </div>
       </section>
 
       <footer className="py-6 px-4 border-t border-border">
         <div className="container mx-auto text-center text-xs sm:text-sm text-muted-foreground">
-          <p>© 2025 TerraMonitor — Local-first greenhouse MVP</p>
+          <p>© 2026 TerraMonitor — Local-first greenhouse MVP</p>
         </div>
       </footer>
     </div>

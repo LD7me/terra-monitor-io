@@ -13,7 +13,7 @@ const Navigation = () => {
   const navItems = [
     { path: "/", icon: Leaf, label: "Home" },
     { path: "/dashboard", icon: Activity, label: "Dashboard" },
-    { path: "/settings", icon: Sliders, label: "Setpoints" },
+    { path: "/settings", icon: Sliders, label: "Settings" },
   ];
 
   return (

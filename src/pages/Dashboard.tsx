@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Navigation from "@/components/Navigation";
-import { SystemConfig } from "@/components/SystemConfig";
 import { DeviceControlPanel } from "@/components/DeviceControlPanel";
 import { SoilMoistureCard } from "@/components/SoilMoistureCard";
 import { ConsumptionCharts } from "@/components/ConsumptionCharts";
@@ -31,7 +30,7 @@ const Dashboard = () => {
             </Badge>
           </div>
 
-          <SystemConfig />
+
 
           {/* Sensor cards: temp · light · soil */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">

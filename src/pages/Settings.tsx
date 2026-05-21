@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { fetchSettings, saveSettings, type AutomationSettings } from "@/lib/api";
+import { SystemConfig } from "@/components/SystemConfig";
+
 
 const FIELDS: Array<{
   key: keyof AutomationSettings;
@@ -66,7 +68,7 @@ const Settings = () => {
       <div className="pt-16 sm:pt-24 pb-8 sm:pb-12 px-3 sm:px-4">
         <div className="container mx-auto max-w-2xl space-y-4 sm:space-y-6">
           <div>
-            <h1 className="text-xl sm:text-3xl font-bold mb-1">Setpoints</h1>
+            <h1 className="text-xl sm:text-3xl font-bold mb-1">Settings</h1>
             <p className="text-muted-foreground text-[11px] sm:text-sm">
               Adjust the automation thresholds the Pi uses to decide when to run devices.
             </p>
@@ -110,6 +112,7 @@ const Settings = () => {
                   </div>
                 </>
               )}
+            <SystemConfig />
             </CardContent>
           </Card>
         </div>
