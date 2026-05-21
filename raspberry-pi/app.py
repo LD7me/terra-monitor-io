@@ -192,17 +192,37 @@ def set_device(device: str, on: bool, reason: str = "auto"):
     return True
 
 # ============================================================
-#  AUTOMATION THRESHOLDS
+#  AUTOMATION THRESHOLDS (user-adjustable via /api/settings)
 # ============================================================
-TEMP_ON = 30.0
-TEMP_OFF = 25.0
+SETTINGS = {
+    "TEMP_ON": 30.0,            # °C — fan turns on above this
+    "TEMP_OFF": 25.0,           # °C — fan turns off below this
+    "SOIL_DRY_ADC_ON": 330.0,   # ADC below this = dry, pump on
+    "SOIL_WET_ADC_OFF": 370.0,  # ADC above this = wet, pump off
+    "DLI_THRESHOLD": 14.0,      # target daily light integral
+}
 
-# Note: Your Arduino code treats < 330 as Dry, while your Python config 
-# previously treated 600 as Dry. I am matching your Arduino logic here.
-SOIL_DRY_ADC_ON = 330
-SOIL_WET_ADC_OFF = 370
+def load_settings():
+    with closing(db()) as c:
+        rows = c.execute("SELECT key, value FROM settings").fetchall()
+        for r in rows:
+            if r["key"] in SETTINGS:
+                SETTINGS[r["key"]] = float(r["value"])
+    print(f"[settings] loaded {SETTINGS}")
 
-DLI_THRESHOLD = 14.0
+def save_settings(updates: dict):
+    with _db_lock, closing(db()) as c:
+        for k, v in updates.items():
+            if k in SETTINGS:
+                SETTINGS[k] = float(v)
+                c.execute(
+                    "INSERT INTO settings(key,value) VALUES(?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (k, float(v)),
+                )
+        c.commit()
+    print(f"[settings] updated -> {SETTINGS}")
+
 GROW_LIGHT_DURATION_S = 2 * 60 * 60  # 2 hours in seconds
 EFFECTIVE_LED_PPFD = 150          # estimated effective PPFD
 LED_DLI_PER_HOUR = (EFFECTIVE_LED_PPFD * 3600) / 1_000_000
