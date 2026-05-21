@@ -103,7 +103,8 @@ const Dashboard = () => {
           <ActivityLog />
 
           <p className="text-[11px] text-muted-foreground text-center pt-2">
-            Last update: {new Date(sensorData.timestamp).toLocaleString()}
+            Last update: {new Date(sensorData.timestamp).toLocaleString()} ·{" "}
+            <a href="/settings" className="underline hover:text-foreground">Adjust setpoints</a>
           </p>
         </div>
       </div>

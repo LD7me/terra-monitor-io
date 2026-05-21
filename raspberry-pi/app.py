@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS device_events (
     reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_device_events_ts ON device_events(device, ts);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value REAL NOT NULL
+);
 """
 
 
@@ -187,17 +192,37 @@ def set_device(device: str, on: bool, reason: str = "auto"):
     return True
 
 # ============================================================
-#  AUTOMATION THRESHOLDS
+#  AUTOMATION THRESHOLDS (user-adjustable via /api/settings)
 # ============================================================
-TEMP_ON = 30.0
-TEMP_OFF = 25.0
+SETTINGS = {
+    "TEMP_ON": 30.0,            # °C — fan turns on above this
+    "TEMP_OFF": 25.0,           # °C — fan turns off below this
+    "SOIL_DRY_ADC_ON": 330.0,   # ADC below this = dry, pump on
+    "SOIL_WET_ADC_OFF": 370.0,  # ADC above this = wet, pump off
+    "DLI_THRESHOLD": 14.0,      # target daily light integral
+}
 
-# Note: Your Arduino code treats < 330 as Dry, while your Python config 
-# previously treated 600 as Dry. I am matching your Arduino logic here.
-SOIL_DRY_ADC_ON = 330
-SOIL_WET_ADC_OFF = 370
+def load_settings():
+    with closing(db()) as c:
+        rows = c.execute("SELECT key, value FROM settings").fetchall()
+        for r in rows:
+            if r["key"] in SETTINGS:
+                SETTINGS[r["key"]] = float(r["value"])
+    print(f"[settings] loaded {SETTINGS}")
 
-DLI_THRESHOLD = 14.0
+def save_settings(updates: dict):
+    with _db_lock, closing(db()) as c:
+        for k, v in updates.items():
+            if k in SETTINGS:
+                SETTINGS[k] = float(v)
+                c.execute(
+                    "INSERT INTO settings(key,value) VALUES(?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (k, float(v)),
+                )
+        c.commit()
+    print(f"[settings] updated -> {SETTINGS}")
+
 GROW_LIGHT_DURATION_S = 2 * 60 * 60  # 2 hours in seconds
 EFFECTIVE_LED_PPFD = 150          # estimated effective PPFD
 LED_DLI_PER_HOUR = (EFFECTIVE_LED_PPFD * 3600) / 1_000_000
@@ -290,31 +315,31 @@ def evaluate_auto_logic(reading):
     # --- 1. FAN & TEMP CONTROL ---
     if temp is not None:
         if overrides["fan"]:
-            if temp > TEMP_ON and device_state["fan"]:
+            if temp > SETTINGS["TEMP_ON"] and device_state["fan"]:
                 overrides["fan"] = False
-            elif temp < TEMP_OFF and not device_state["fan"]:
+            elif temp < SETTINGS["TEMP_OFF"] and not device_state["fan"]:
                 overrides["fan"] = False
 
         if not overrides["fan"]:
-            if temp > TEMP_ON and not device_state["irrigation"]:
+            if temp > SETTINGS["TEMP_ON"] and not device_state["irrigation"]:
                 set_device("fan", True, reason="auto:temp_high")
                 if not overrides["irrigation"]:
                     set_device("irrigation", False, reason="auto:pump_priority")
-            elif temp < TEMP_OFF and device_state["fan"]:
+            elif temp < SETTINGS["TEMP_OFF"] and device_state["fan"]:
                 set_device("fan", False, reason="auto:temp_low")
 
     # --- 2. SOIL & PUMP CONTROL ---
     if adc is not None:
         if overrides["irrigation"]:
-            if adc < SOIL_DRY_ADC_ON and device_state["irrigation"]:
+            if adc < SETTINGS["SOIL_DRY_ADC_ON"] and device_state["irrigation"]:
                 overrides["irrigation"] = False
-            elif adc > SOIL_WET_ADC_OFF and not device_state["irrigation"]:
+            elif adc > SETTINGS["SOIL_WET_ADC_OFF"] and not device_state["irrigation"]:
                 overrides["irrigation"] = False
 
         if not overrides["irrigation"]:
-            if adc < SOIL_DRY_ADC_ON and not device_state["irrigation"] and not device_state["fan"]:
+            if adc < SETTINGS["SOIL_DRY_ADC_ON"] and not device_state["irrigation"] and not device_state["fan"]:
                 set_device("irrigation", True, reason="auto:soil_dry")
-            elif adc > SOIL_WET_ADC_OFF and device_state["irrigation"]:
+            elif adc > SETTINGS["SOIL_WET_ADC_OFF"] and device_state["irrigation"]:
                 set_device("irrigation", False, reason="auto:soil_wet")
 
     # --- 3. GROW LIGHT (Sunset Event & Tracking) ---
@@ -329,8 +354,8 @@ def evaluate_auto_logic(reading):
             if (is_sunset or is_night_fallback) and not device_state["grow_light"]:
                 final_dli = auto_state["daytime_max_dli"] if auto_state["daytime_max_dli"] > 0 else (dli or 0)
                 
-                if final_dli < DLI_THRESHOLD:
-                    missing_dli = DLI_THRESHOLD - final_dli
+                if final_dli < SETTINGS["DLI_THRESHOLD"]:
+                    missing_dli = SETTINGS["DLI_THRESHOLD"] - final_dli
                     hours_needed = (missing_dli / LED_DLI_PER_HOUR) * 1.2
                     hours_needed = max(0.5, min(hours_needed, 4.0))
                     duration_s = hours_needed * 3600
@@ -602,12 +627,34 @@ def api_grow_light(action):
     return _control("grow_light", action)
 
 
+@app.route("/api/settings", methods=["GET"])
+def api_get_settings():
+    return jsonify(SETTINGS)
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_post_settings():
+    data = request.get_json(silent=True) or {}
+    updates = {}
+    for k in SETTINGS.keys():
+        if k in data:
+            try:
+                updates[k] = float(data[k])
+            except (TypeError, ValueError):
+                return jsonify({"error": f"{k} must be a number"}), 400
+    if not updates:
+        return jsonify({"error": "no valid keys provided"}), 400
+    save_settings(updates)
+    return jsonify(SETTINGS)
+
+
 # ============================================================
 #  MAIN
 # ============================================================
 def main():
     print("=== TerraMonitor Pi (LOCAL) ===")
     init_db()
+    load_settings()
     setup_gpio()
     t = threading.Thread(target=sensor_loop, daemon=True)
     t.start()

@@ -87,3 +87,15 @@ export const testConnection = async (): Promise<boolean> => {
     return false;
   }
 };
+
+export interface AutomationSettings {
+  TEMP_ON: number;
+  TEMP_OFF: number;
+  SOIL_DRY_ADC_ON: number;
+  SOIL_WET_ADC_OFF: number;
+  DLI_THRESHOLD: number;
+}
+
+export const fetchSettings = () => request<AutomationSettings>('/api/settings');
+export const saveSettings = (s: Partial<AutomationSettings>) =>
+  request<AutomationSettings>('/api/settings', { method: 'POST', body: JSON.stringify(s) });
