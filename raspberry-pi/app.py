@@ -627,12 +627,34 @@ def api_grow_light(action):
     return _control("grow_light", action)
 
 
+@app.route("/api/settings", methods=["GET"])
+def api_get_settings():
+    return jsonify(SETTINGS)
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_post_settings():
+    data = request.get_json(silent=True) or {}
+    updates = {}
+    for k in SETTINGS.keys():
+        if k in data:
+            try:
+                updates[k] = float(data[k])
+            except (TypeError, ValueError):
+                return jsonify({"error": f"{k} must be a number"}), 400
+    if not updates:
+        return jsonify({"error": "no valid keys provided"}), 400
+    save_settings(updates)
+    return jsonify(SETTINGS)
+
+
 # ============================================================
 #  MAIN
 # ============================================================
 def main():
     print("=== TerraMonitor Pi (LOCAL) ===")
     init_db()
+    load_settings()
     setup_gpio()
     t = threading.Thread(target=sensor_loop, daemon=True)
     t.start()
