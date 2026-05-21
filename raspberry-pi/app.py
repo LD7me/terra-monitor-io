@@ -110,6 +110,11 @@ CREATE TABLE IF NOT EXISTS device_events (
     reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_device_events_ts ON device_events(device, ts);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value REAL NOT NULL
+);
 """
 
 
