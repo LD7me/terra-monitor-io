@@ -378,7 +378,6 @@ def sensor_loop():
                 d = arduino.read()
                 if d:
                     cached = d
-                print(cached)
             else:
                 # MOCK: synthesize a reading so the dashboard has something
                 cached = {"temp": 22.5, "humidity": 55, "soil": 420, "lux": 800, "ppfd": 200, "dli": 12, "is_day": True}
