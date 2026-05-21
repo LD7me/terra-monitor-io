@@ -228,11 +228,11 @@ def soil_to_pct_label(adc):
     if rng:
         pct = max(0.0, min(100.0, round((SOIL_DRY_ADC - adc) / rng * 100.0, 1)))
     if adc < 330:
-        label = "Wet"
-    elif adc > 370:
         label = "Dry"
+    elif adc > 370 and adc <800:
+        label = "Wet"
     else:
-        label = "Moist"
+        label = "waterlogged"
     return pct, label
 
 
