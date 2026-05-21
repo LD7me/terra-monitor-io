@@ -375,11 +375,12 @@ def sensor_loop():
     while True:
         try:
             if arduino:
-                d = arduino.read()
-                if d:
-                    # THE FIX: Update the dictionary instead of replacing it!
-                    # This keeps the 1-minute lux readings alive while temp updates rapidly.
-                    cached.update(d)
+                cached = arduino.read()
+                # if d:
+                #     # THE FIX: Update the dictionary instead of replacing it!
+                #     # This keeps the 1-minute lux readings alive while temp updates rapidly.
+                #     cached.update(d)
+                print(cached)
             else:
                 # MOCK: synthesize a reading so the dashboard has something
                 cached = {"temp": 22.5, "humidity": 55, "soil": 420, "lux": 800, "ppfd": 200, "dli": 12, "is_day": True}
