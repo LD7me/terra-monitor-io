@@ -254,8 +254,7 @@ def set_door(is_open):
     
     # Pro-tip: MG996R servos buzz loudly when holding position. 
     # Waiting 1 second for it to move, then dropping the signal stops the buzzing.
-    time.sleep(1)
-    door_servo.value = None
+    time.sleep(2.5)
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
