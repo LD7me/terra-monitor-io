@@ -243,40 +243,33 @@ auto_state["overrides"]["door"] = False
 # ============================================================
 latest_reading = {}
 
+import threading
+
 def set_door(is_open):
-    CLOSED_ANGLE = -10 
-    OPEN_ANGLE = 90
-    
-    # --- SPEED TUNING ---
-    # 0.01 = Fast but smooth
-    # 0.03 = Nice and slow
-    # 0.05 = Very slow cinematic crawl
-    SPEED_DELAY = 0.02 
-
-    # Figure out where we are starting and where we are going
-    start_angle = CLOSED_ANGLE if is_open else OPEN_ANGLE
-    target_angle = OPEN_ANGLE if is_open else CLOSED_ANGLE
-    
-    # Figure out if we need to count up (+1) or count down (-1)
-    step = 1 if target_angle > start_angle else -1
-    
-    # --- THE SWEEP LOOP ---
-    # This moves the servo exactly 1 degree at a time with a tiny pause
-    for current_angle in range(start_angle, target_angle + step, step):
-        door_servo.angle = current_angle
-        time.sleep(SPEED_DELAY)
+    # 2. Define the movement logic in a separate function
+    def move_servo():
+        CLOSED_ANGLE = -10
+        OPEN_ANGLE = 90
+        SPEED_DELAY = 0.02
         
-    device_state["door"] = is_open
+        start_angle = CLOSED_ANGLE if is_open else OPEN_ANGLE
+        target_angle = OPEN_ANGLE if is_open else CLOSED_ANGLE
+        step = 1 if target_angle > start_angle else -1
+        
+        for current_angle in range(start_angle, target_angle + step, step):
+            door_servo.angle = current_angle
+            time.sleep(SPEED_DELAY)
+            
+        if not is_open:
+            time.sleep(0.5)
+            door_servo.value = None
 
-    # --- THE HOLDING TORQUE TRICK ---
-    if is_open:
-        # Keep the torque locked to hold the door against gravity
-        pass 
-    else:
-        # We just closed the door. Wait half a second for it to squish 
-        # into the foam, then drop the signal so it stops fighting the tape.
-        time.sleep(0.5) 
-        door_servo.value = None 
+    # 3. Start the movement in the background so it doesn't block the API
+    thread = threading.Thread(target=move_servo)
+    thread.start()
+    
+    # 4. Update the state immediately
+    device_state["door"] = is_open
         
 
 def soil_to_pct_label(adc):
