@@ -12,7 +12,7 @@ export interface SensorData {
   isDay: boolean | null;
   timestamp: string;
   lastIrrigationAt: string | null;
-  devices: { irrigation: boolean; fan: boolean; grow_light: boolean };
+  devices: { irrigation: boolean; fan: boolean; grow_light: boolean; door: boolean; };
 }
 
 const initial: SensorData = {
@@ -26,7 +26,7 @@ const initial: SensorData = {
   isDay: null,
   timestamp: new Date().toISOString(),
   lastIrrigationAt: null,
-  devices: { irrigation: false, fan: false, grow_light: false },
+  devices: { irrigation: false, fan: false, grow_light: false, door:false },
 };
 
 export function useSensorData(pollMs = 5000) {
@@ -40,11 +40,17 @@ export function useSensorData(pollMs = 5000) {
       try {
         const d = await fetchSensorData();
         if (cancelled) return;
+        
         if (d.ready === false) {
           setIsConnected(true);
-          setSensorData((prev) => ({ ...prev, devices: d.devices ?? prev.devices }));
+          // FIX 1: Safely merge incoming devices with previous devices
+          setSensorData((prev) => ({ 
+            ...prev, 
+            devices: { ...prev.devices, ...(d.devices || {}) } 
+          }));
           return;
         }
+        
         setSensorData({
           temperature: d.temperature ?? 0,
           humidity: d.humidity ?? 0,
@@ -56,8 +62,11 @@ export function useSensorData(pollMs = 5000) {
           isDay: d.is_day,
           timestamp: d.timestamp,
           lastIrrigationAt: (d as any).last_irrigation ?? null,
-          devices: d.devices ?? initial.devices,
+          
+          // FIX 2: Safely merge incoming devices with our initial defaults
+          devices: { ...initial.devices, ...(d.devices || {}) },
         });
+        
         setIsConnected(true);
       } catch {
         if (!cancelled) setIsConnected(false);

@@ -26,12 +26,6 @@ Water model
    pump drips at 60 mL/s while ON
    mL accumulated = 60 * seconds_on
 
-Run on the Pi
--------------
-   cd ~/raspberry-pi
-   source venv/bin/activate
-   pip install flask flask-cors pyserial RPi.GPIO
-   python3 app.py
 """
 
 import os
@@ -40,6 +34,7 @@ import threading
 import time
 from datetime import datetime, timezone, timedelta
 from contextlib import closing
+from gpiozero import AngularServo
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -72,7 +67,8 @@ PUSH_INTERVAL = 5  # seconds between sensor inserts
 SOIL_DRY_ADC = 600
 SOIL_WET_ADC = 280
 
-# GPIO pin map (BCM)
+# GPIO pin map (BCM)    
+PIN_DOOR = 12
 PIN_PUMP = 18
 PIN_FAN = 23
 PIN_GROW_LIGHT = 24
@@ -82,6 +78,7 @@ RELAY_ACTIVE_LOW = False
 # Power & water rates
 DEVICE_POWER_W = {"irrigation": 5.0, "fan": 15.0, "grow_light": 5.0}
 PUMP_FLOW_ML_PER_S = 60.0
+door_servo = AngularServo(PIN_DOOR, min_angle=0, max_angle=90, min_pulse_width=0.0005, max_pulse_width=0.0025)
 
 
 # ============================================================
@@ -238,12 +235,27 @@ auto_state = {
         "grow_light": False
     }
 }
+device_state["door"] = False  # False = Closed, True = Open
+auto_state["overrides"]["door"] = False
 
 # ============================================================
 #  SENSOR THREAD
 # ============================================================
 latest_reading = {}
 
+def set_door(is_open):
+    """Moves the servo and then cuts the signal to prevent buzzing/overheating."""
+    if is_open:
+        door_servo.angle = 90
+    else:
+        door_servo.angle = 0
+        
+    device_state["door"] = is_open
+    
+    # Pro-tip: MG996R servos buzz loudly when holding position. 
+    # Waiting 1 second for it to move, then dropping the signal stops the buzzing.
+    time.sleep(1)
+    door_servo.value = None
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
@@ -384,6 +396,30 @@ def evaluate_auto_logic(reading):
                 set_device("grow_light", False, reason="auto:timer_done")
                 auto_state["grow_light_start"] = 0
                 auto_state["grow_light_duration"] = 0
+
+    # --- 5. REALTIME DOOR SCHEDULE (7AM Close / 7PM Open) ---
+    current_hour = datetime.now().hour
+    door_currently_open = device_state["door"]
+    overrides = auto_state["overrides"]
+
+    # Release manual override naturally if the time matches the current state
+    if overrides["door"]:
+        if (current_hour >= 19 or current_hour < 7) and door_currently_open:
+            overrides["door"] = False # Matches night open schedule
+        elif (7 <= current_hour < 19) and not door_currently_open:
+            overrides["door"] = False # Matches day close schedule
+
+    # Run schedule if no manual override is active
+    if not overrides["door"]:
+        # Night Rule: From 7:00 PM (19) to 6:59 AM, the door should be OPEN
+        if (current_hour >= 19 or current_hour < 7) and not door_currently_open:
+            print("[schedule] 7:00 PM reached. Opening door.")
+            set_door(True)
+            
+        # Day Rule: From 7:00 AM (7) to 6:59 PM (18:59), the door should be CLOSED
+        elif (7 <= current_hour < 19) and door_currently_open:
+            print("[schedule] 7:00 AM reached. Closing door.")
+            set_door(False)
                 
 def sensor_loop():
     arduino = None
@@ -601,7 +637,13 @@ def _control(device, action):
     if action not in ("on", "off"):
         return jsonify({"error": "action must be on|off"}), 400
     try:
-        changed = set_device(device, action == "on", reason="manual")
+        is_on = (action == "on")
+        
+        if device == "door":
+            set_door(is_on) 
+            changed = True
+        else:
+            changed = set_device(device, is_on, reason="manual")
 
         # Engage a hard manual override lock
         auto_state["overrides"][device] = True
@@ -625,6 +667,10 @@ def api_fan(action):
 @app.route("/api/grow_light/<action>", methods=["POST"])
 def api_grow_light(action):
     return _control("grow_light", action)
+
+@app.route("/api/door/<action>", methods=["POST"])
+def api_door(action):
+    return _control("door", action)
 
 
 @app.route("/api/settings", methods=["GET"])

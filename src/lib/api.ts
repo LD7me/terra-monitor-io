@@ -48,7 +48,7 @@ const STORAGE_KEY = 'terramonitor_config';
 export const getSystemConfig = (): SystemConfig => {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) return JSON.parse(raw);
-  return { piAddress: 'raspberrypi.local', apiPort: '5000' };
+  return { piAddress: '10.131.22.55', apiPort: '5000' };
 };
 
 export const saveSystemConfig = (config: SystemConfig): void => {
@@ -75,7 +75,7 @@ export const fetchEvents = (limit = 50) => request<DeviceEvent[]>(`/api/events?l
 export const fetchStatus = () => request<{ status: string; uptime_s: number; devices: any }>('/api/status');
 
 export const controlDevice = (
-  device: 'irrigation' | 'fan' | 'grow_light',
+  device: 'irrigation' | 'fan' | 'grow_light'| 'door',
   action: 'on' | 'off',
 ) => request<{ status: string }>(`/api/${device}/${action}`, { method: 'POST' });
 

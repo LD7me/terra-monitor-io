@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Droplets, Fan, Power, Cloud, Loader2, Lightbulb } from "lucide-react";
+import { Droplets, Fan, Power, Cloud, Loader2, Lightbulb, DoorOpen } from "lucide-react";
 import { useDeviceControl } from "@/hooks/useDeviceControl";
 import type { SensorData } from "@/hooks/useSensorData";
 
@@ -14,13 +14,16 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
     irrigationActive,
     fanActive,
     growLightActive,
+    doorActive,           // Added Door State
     irrigationPending,
     fanPending,
     growLightPending,
+    doorPending,          // Added Door Pending
     sendingCommand,
     toggleIrrigation,
     toggleFan,
     toggleGrowLight,
+    toggleDoor,           // Added Door Toggle
   } = useDeviceControl(sensorData);
 
   type TileProps = {
@@ -35,9 +38,11 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
     activeLabel: string;
     onToggle: () => void;
     variantOff: 'default' | 'secondary';
+    btnTextOn?: string;   
+    btnTextOff?: string;  
   };
 
-  const Tile = ({ title, subtitle, icon, activeBg, iconActiveColor, active, pending, sending, activeLabel, onToggle, variantOff }: TileProps) => (
+  const Tile = ({ title, subtitle, icon, activeBg, iconActiveColor, active, pending, sending, activeLabel, onToggle, variantOff, btnTextOn = "Turn OFF", btnTextOff = "Turn ON" }: TileProps) => (
     <div className="p-4 sm:p-6 rounded-lg border-2 border-border bg-card">
       <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -69,7 +74,7 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
         disabled={sending || pending}
       >
         {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
-        {sending ? "Sending..." : active ? "Turn OFF" : "Turn ON"}
+        {sending ? "Sending..." : active ? btnTextOn : btnTextOff}
       </Button>
     </div>
   );
@@ -81,7 +86,7 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
           <div>
             <CardTitle>Device Control Panel</CardTitle>
             <CardDescription>
-              Control pump, fan and grow light via cloud commands (Pi GPIO 18, 23, 24)
+              Control pump, fan, grow light, and door via cloud commands
             </CardDescription>
           </div>
           <Badge variant="outline" className="gap-1">
@@ -91,7 +96,8 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Updated grid from cols-3 to cols-2 / lg:cols-4 so 4 items fit perfectly */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Tile
             title="Irrigation"
             subtitle="Pump · GPIO 18"
@@ -130,6 +136,21 @@ export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {
             activeLabel="On"
             onToggle={toggleGrowLight}
             variantOff="default"
+          />
+          <Tile
+            title="AWG Door"
+            subtitle="Servo · GPIO 13"
+            icon={<DoorOpen className="h-5 w-5 sm:h-6 sm:w-6" />}
+            activeBg="bg-emerald-500" 
+            iconActiveColor="text-white"
+            active={doorActive}
+            pending={doorPending}
+            sending={sendingCommand === 'door'}
+            activeLabel="Open"
+            onToggle={toggleDoor}
+            variantOff="default"
+            btnTextOn="Close Door" 
+            btnTextOff="Open Door"  
           />
         </div>
       </CardContent>
