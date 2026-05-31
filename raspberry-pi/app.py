@@ -246,7 +246,7 @@ latest_reading = {}
 def set_door(is_open):
     """Moves the servo and then cuts the signal to prevent buzzing/overheating."""
     if is_open:
-        door_servo.angle = 90
+        door_servo.angle = 45
     else:
         door_servo.angle = 0
         
@@ -255,6 +255,7 @@ def set_door(is_open):
     # Pro-tip: MG996R servos buzz loudly when holding position. 
     # Waiting 1 second for it to move, then dropping the signal stops the buzzing.
     time.sleep(2.5)
+    door_servo.value = None
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
