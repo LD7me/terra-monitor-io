@@ -243,20 +243,32 @@ auto_state["overrides"]["door"] = False
 # ============================================================
 latest_reading = {}
 
+import threading 
 def set_door(is_open):
-    """Moves the servo and then cuts the signal to prevent buzzing/overheating."""
-    if is_open:
-        door_servo.angle = 50
-    else:
-        door_servo.angle = -10
-
+    # 2. Define the movement logic in a separate function
+    def move_servo():
+        CLOSED_ANGLE = -10
+        OPEN_ANGLE = 90
+        SPEED_DELAY = 0.02
         
-    device_state["door"] = is_open
+        start_angle = CLOSED_ANGLE if is_open else OPEN_ANGLE
+        target_angle = OPEN_ANGLE if is_open else CLOSED_ANGLE
+        step = 1 if target_angle > start_angle else -1
+        
+        for current_angle in range(start_angle, target_angle + step, step):
+            door_servo.angle = current_angle
+            time.sleep(SPEED_DELAY)
+            
+        if not is_open:
+            time.sleep(0.5)
+            door_servo.value = None
+
+    # 3. Start the movement in the background so it doesn't block the API
+    thread = threading.Thread(target=move_servo)
+    thread.start()
     
-    # Pro-tip: MG996R servos buzz loudly when holding position. 
-    # Waiting 1 second for it to move, then dropping the signal stops the buzzing.
-    time.sleep(2.5)
-    door_servo.value = None
+    # 4. Update the state immediately
+    device_state["door"] = is_open
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
