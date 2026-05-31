@@ -9,7 +9,7 @@ import { Thermometer, Sun } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
 
 const Dashboard = () => {
-  const { sensorData, isConnected } = useSensorData();
+const { sensorData, isConnected, refresh } = useSensorData();
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,7 +93,7 @@ const Dashboard = () => {
           </div>
 
           {/* Device controls */}
-          <DeviceControlPanel sensorData={sensorData} />
+          <DeviceControlPanel sensorData={sensorData} refresh = {refresh}/>
 
           {/* Consumption */}
           <ConsumptionCharts />

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { fetchSensorData } from '@/lib/api';
+
 
 export interface SensorData {
   temperature: number;
@@ -33,53 +34,44 @@ export function useSensorData(pollMs = 5000) {
   const [sensorData, setSensorData] = useState<SensorData>(initial);
   const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const tick = async () => {
-      try {
-        const d = await fetchSensorData();
-        if (cancelled) return;
-        
-        if (d.ready === false) {
-          setIsConnected(true);
-          // FIX 1: Safely merge incoming devices with previous devices
-          setSensorData((prev) => ({ 
-            ...prev, 
-            devices: { ...prev.devices, ...(d.devices || {}) } 
-          }));
-          return;
-        }
-        
-        setSensorData({
-          temperature: d.temperature ?? 0,
-          humidity: d.humidity ?? 0,
-          soilMoisture: d.soil_moisture ?? 'Unknown',
-          lightIntensity: d.light_intensity,
-          lux: d.lux,
-          ppfd: d.ppfd,
-          dli: d.dli,
-          isDay: d.is_day,
-          timestamp: d.timestamp,
-          lastIrrigationAt: (d as any).last_irrigation ?? null,
-          
-          // FIX 2: Safely merge incoming devices with our initial defaults
-          devices: { ...initial.devices, ...(d.devices || {}) },
-        });
-        
+  // 1. We create the refresh function OUTSIDE the useEffect so we can export it
+  const refresh = useCallback(async () => {
+    try {
+      const d = await fetchSensorData();
+      if (d.ready === false) {
         setIsConnected(true);
-      } catch {
-        if (!cancelled) setIsConnected(false);
+        setSensorData((prev) => ({ 
+          ...prev, 
+          devices: { ...prev.devices, ...(d.devices || {}) } 
+        }));
+        return;
       }
-    };
+      setSensorData({
+        temperature: d.temperature ?? 0,
+        humidity: d.humidity ?? 0,
+        soilMoisture: d.soil_moisture ?? 'Unknown',
+        lightIntensity: d.light_intensity,
+        lux: d.lux,
+        ppfd: d.ppfd,
+        dli: d.dli,
+        isDay: d.is_day,
+        timestamp: d.timestamp,
+        lastIrrigationAt: (d as any).last_irrigation ?? null,
+        devices: { ...initial.devices, ...(d.devices || {}) },
+      });
+      setIsConnected(true);
+    } catch {
+      setIsConnected(false);
+    }
+  }, []);
 
-    tick();
-    const id = setInterval(tick, pollMs);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [pollMs]);
+  // 2. The useEffect now just calls our refresh function on a timer
+  useEffect(() => {
+    refresh(); // Fetch immediately on load
+    const id = setInterval(refresh, pollMs);
+    return () => clearInterval(id);
+  }, [pollMs, refresh]);
 
-  return { sensorData, isConnected };
+  // 3. Now we can successfully return it!
+  return { sensorData, isConnected, refresh };
 }

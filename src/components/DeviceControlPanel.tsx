@@ -7,6 +7,7 @@ import type { SensorData } from "@/hooks/useSensorData";
 
 interface DeviceControlPanelProps {
   sensorData: SensorData;
+  refresh?: () => void; 
 }
 
 export function DeviceControlPanel({ sensorData }: DeviceControlPanelProps) {

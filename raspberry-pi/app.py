@@ -396,29 +396,29 @@ def evaluate_auto_logic(reading):
                 auto_state["grow_light_start"] = 0
                 auto_state["grow_light_duration"] = 0
 
-    # --- 5. REALTIME DOOR SCHEDULE (7AM Close / 7PM Open) ---
-    current_hour = datetime.now().hour
-    door_currently_open = device_state["door"]
-    overrides = auto_state["overrides"]
+    # # --- 5. REALTIME DOOR SCHEDULE (7AM Close / 7PM Open) ---
+    # current_hour = datetime.now().hour
+    # door_currently_open = device_state["door"]
+    # overrides = auto_state["overrides"]
 
-    # Release manual override naturally if the time matches the current state
-    if overrides["door"]:
-        if (current_hour >= 19 or current_hour < 7) and door_currently_open:
-            overrides["door"] = False # Matches night open schedule
-        elif (7 <= current_hour < 19) and not door_currently_open:
-            overrides["door"] = False # Matches day close schedule
+    # # Release manual override naturally if the time matches the current state
+    # if overrides["door"]:
+    #     if (current_hour >= 19 or current_hour < 7) and door_currently_open:
+    #         overrides["door"] = False # Matches night open schedule
+    #     elif (7 <= current_hour < 19) and not door_currently_open:
+    #         overrides["door"] = False # Matches day close schedule
 
-    # Run schedule if no manual override is active
-    if not overrides["door"]:
-        # Night Rule: From 7:00 PM (19) to 6:59 AM, the door should be OPEN
-        if (current_hour >= 19 or current_hour < 7) and not door_currently_open:
-            print("[schedule] 7:00 PM reached. Opening door.")
-            set_door(True)
+    # # Run schedule if no manual override is active
+    # if not overrides["door"]:
+    #     # Night Rule: From 7:00 PM (19) to 6:59 AM, the door should be OPEN
+    #     if (current_hour >= 19 or current_hour < 7) and not door_currently_open:
+    #         print("[schedule] 7:00 PM reached. Opening door.")
+    #         set_door(True)
             
-        # Day Rule: From 7:00 AM (7) to 6:59 PM (18:59), the door should be CLOSED
-        elif (7 <= current_hour < 19) and door_currently_open:
-            print("[schedule] 7:00 AM reached. Closing door.")
-            set_door(False)
+    #     # Day Rule: From 7:00 AM (7) to 6:59 PM (18:59), the door should be CLOSED
+    #     elif (7 <= current_hour < 19) and door_currently_open:
+    #         print("[schedule] 7:00 AM reached. Closing door.")
+    #         set_door(False)
                 
 def sensor_loop():
     arduino = None
