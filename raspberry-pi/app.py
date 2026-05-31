@@ -266,6 +266,8 @@ def set_door(is_open):
         door_servo.angle = current_angle
         time.sleep(SPEED_DELAY)
         
+    device_state["door"] = is_open
+
     # --- THE HOLDING TORQUE TRICK ---
     if is_open:
         # Keep the torque locked to hold the door against gravity
@@ -276,7 +278,6 @@ def set_door(is_open):
         time.sleep(0.5) 
         door_servo.value = None 
         
-    device_state["door"] = is_open
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
