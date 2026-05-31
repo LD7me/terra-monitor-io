@@ -248,7 +248,7 @@ def set_door(is_open):
     if is_open:
         door_servo.angle = 45
     else:
-        door_servo.angle = -2
+        door_servo.angle = 0
 
         
     device_state["door"] = is_open
