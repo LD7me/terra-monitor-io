@@ -247,9 +247,9 @@ import threading
 def set_door(is_open):
     # 2. Define the movement logic in a separate function
     def move_servo():
-        CLOSED_ANGLE = -10
+        CLOSED_ANGLE = 0
         OPEN_ANGLE = 90
-        SPEED_DELAY = 0.02
+        SPEED_DELAY = 0.03
         
         start_angle = CLOSED_ANGLE if is_open else OPEN_ANGLE
         target_angle = OPEN_ANGLE if is_open else CLOSED_ANGLE
