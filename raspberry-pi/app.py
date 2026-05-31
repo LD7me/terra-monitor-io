@@ -244,19 +244,39 @@ auto_state["overrides"]["door"] = False
 latest_reading = {}
 
 def set_door(is_open):
-    """Moves the servo and then cuts the signal to prevent buzzing/overheating."""
-    if is_open:
-        door_servo.angle = 45
-    else:
-        door_servo.angle = 0
+    CLOSED_ANGLE = -10 
+    OPEN_ANGLE = 90
+    
+    # --- SPEED TUNING ---
+    # 0.01 = Fast but smooth
+    # 0.03 = Nice and slow
+    # 0.05 = Very slow cinematic crawl
+    SPEED_DELAY = 0.02 
 
+    # Figure out where we are starting and where we are going
+    start_angle = CLOSED_ANGLE if is_open else OPEN_ANGLE
+    target_angle = OPEN_ANGLE if is_open else CLOSED_ANGLE
+    
+    # Figure out if we need to count up (+1) or count down (-1)
+    step = 1 if target_angle > start_angle else -1
+    
+    # --- THE SWEEP LOOP ---
+    # This moves the servo exactly 1 degree at a time with a tiny pause
+    for current_angle in range(start_angle, target_angle + step, step):
+        door_servo.angle = current_angle
+        time.sleep(SPEED_DELAY)
+        
+    # --- THE HOLDING TORQUE TRICK ---
+    if is_open:
+        # Keep the torque locked to hold the door against gravity
+        pass 
+    else:
+        # We just closed the door. Wait half a second for it to squish 
+        # into the foam, then drop the signal so it stops fighting the tape.
+        time.sleep(0.5) 
+        door_servo.value = None 
         
     device_state["door"] = is_open
-    
-    # Pro-tip: MG996R servos buzz loudly when holding position. 
-    # Waiting 1 second for it to move, then dropping the signal stops the buzzing.
-    time.sleep(2.5)
-    door_servo.value = None
 
 def soil_to_pct_label(adc):
     if not isinstance(adc, (int, float)):
