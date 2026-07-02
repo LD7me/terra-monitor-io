@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
-import { Sprout, Activity, Download } from "lucide-react";
-import { downloadSetupFiles } from "@/lib/downloadSetup";
-import { toast } from "sonner";
+import { Sprout, Activity } from "lucide-react";
 
 const Index = () => {
   return (
@@ -33,19 +31,6 @@ const Index = () => {
                 Open Dashboard
               </Button>
             </Link>
-            {/* <Button
-              variant="outline"
-              size="lg"
-              className="gap-2"
-              onClick={async () => {
-                toast.info("Preparing download...");
-                await downloadSetupFiles();
-                toast.success("Setup files downloaded!");
-              }}
-            >
-              <Download className="h-5 w-5" />
-              Pi Setup Files
-            </Button> */}
           </div>
 
           <p className="text-xs text-muted-foreground mt-6">

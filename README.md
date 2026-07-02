@@ -1,132 +1,112 @@
-# TerraMonitor — Local-first Greenhouse MVP
+<div align="center">
 
-Arduino sensors → Raspberry Pi (Flask + SQLite) → React dashboard polling the Pi
-directly over the local network. No cloud, no auth.
+# 🌱 TerraMonitor
 
-> Graduation-project MVP. Optimised for simplicity, not production.
+### Solar-Powered Automated Greenhouse
 
----
+**CEN 492 Graduation Project · King Saud University, Dept. of Computer Engineering**
 
-## Architecture
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Flask](https://img.shields.io/badge/Flask-Python-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-controller-A22846?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/)
+[![Arduino](https://img.shields.io/badge/Arduino-Uno-00979D?logo=arduino&logoColor=white)](https://www.arduino.cc/)
+
+<img src="docs/images/concept-overview.png" alt="System concept overview — solar power, sensing, actuators, AWG, and dashboard" width="800">
+
+</div>
+
+A greenhouse that waters, cools, and lights itself. Sensors watch the soil, air, and sun;
+a Raspberry Pi decides what to do about it; solar panels keep the lights on; and a
+desiccant unit pulls irrigation water straight out of the air. This repo holds the
+software — Arduino firmware, Pi controller, and the web dashboard — for the whole build.
+
+## The build
+
+**Sensing** — DHT11, an FC-28 soil probe, and a VEML7700 light sensor feed an Arduino Uno,
+which streams JSON to the Pi over serial every half second.
+
+<img src="docs/images/circuit-diagram.png" alt="Arduino Uno wiring for DHT11, FC-28, and VEML7700" width="560">
+
+**Actuators** — pump, fans, and red/blue grow lights, each on its own MOSFET driver off
+the Pi's GPIO.
+
+<img src="docs/images/actuators.jpg" alt="Pump in reservoir, fans on the greenhouse wall, grow-light strips on the roof" width="560">
+
+**Power** — a 280 W solar panel charges a 50 Ah LiFePO4 battery bank through an MPPT
+controller, giving the whole system ~1.5 days of off-grid autonomy.
+
+<img src="docs/images/solar-unit.jpg" alt="280W solar panel, 50Ah LiFePO4 battery bank, and MPPT charge controller" width="560">
+
+**Water, out of thin air** — a passive atmospheric water generator: silica gel soaks up
+humidity overnight, then a sealed glass-topped box uses solar heat to sweat it back out as
+water during the day.
+
+<img src="docs/images/awg-cycle.png" alt="AWG absorption phase at night, release/condensation phase during the day" width="560">
+<img src="docs/images/awg-result.jpg" alt="Water collected from a release cycle" width="200">
+
+**Dashboard** — live readings, manual overrides, consumption charts, and an activity log
+that explains *why* something turned on. Also runs as a touchscreen kiosk mounted right on
+the greenhouse.
+
+<img src="docs/images/dashboard.png" alt="TerraMonitor dashboard: live sensor cards, device control panel, consumption charts, activity log" width="900">
+<img src="docs/images/kiosk.jpg" alt="Touchscreen kiosk running the dashboard, mounted on the greenhouse enclosure" width="560">
+
+## How it fits together
 
 ```
-[Arduino Uno]  --USB serial-->  [Raspberry Pi]  <--HTTP-->  [React dashboard on laptop]
-   DHT11                          Flask + SQLite              (npm run dev)
-   Light sensor                   GPIO relays
-   Soil ADC                       Auto control + logs
+[Arduino Uno]  --USB serial (JSON)-->  [Raspberry Pi]  <--HTTP-->  [React dashboard]
+   sensors                                Flask + SQLite              web or kiosk
+                                           relays + automation
 ```
 
-* All sensor history and device events are stored in **`terramonitor.db`** on the Pi.
-* Dashboard runs on **your laptop** with `npm run dev` so HTTP calls to the Pi
-  work without HTTPS mixed-content issues.
+<img src="docs/images/architecture.png" alt="Software stack: sensing unit, controller unit, and user interface unit" width="460">
 
----
+Everything is local-first — the Pi stores every reading and device event in SQLite and
+serves it over the LAN, no cloud required. Fan, pump, and grow-light thresholds are all
+editable live from the dashboard's Settings page.
 
-## Hardware
+## Running it
 
-| Component         | Notes                                                    |
-| ----------------- | -------------------------------------------------------- |
-| Arduino Uno       | Reads DHT11 (temp/humidity), light sensor, soil ADC      |
-| Raspberry Pi      | Runs Flask API, SQLite store, controls relays            |
-| Serial USB        | Arduino → Pi data link                                   |
-| Relay module      | 3 channels: pump, fan, grow light                        |
-
-**GPIO pin map (BCM):**
-
-| Device     | Pin |
-| ---------- | --- |
-| Pump       | 18  |
-| Fan        | 23  |
-| Grow light | 24  |
-
-**Power model (assumed nameplate):** pump 5 W · fan 15 W · grow-light 5 W
-**Pump flow:** ~60 mL/s while ON
-
----
-
-## Pi setup
-
-```sh
-cd ~/raspberry-pi
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt   # flask, flask-cors, pyserial, RPi.GPIO
+```bash
+# Pi controller
+cd raspberry-pi
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 python3 app.py
 ```
 
-The API listens on `0.0.0.0:5000`. Find the Pi's IP with `hostname -I`.
-
-To run on boot, add a `systemd` unit or simply launch from `~/.bashrc` / `cron @reboot`.
-
----
-
-## Dashboard setup
-
-```sh
+```bash
+# Dashboard
 npm install
-npm run dev                       # http://localhost:5173
+npm run dev   # http://localhost:8080
 ```
 
-Open the dashboard, then in the **Raspberry Pi connection** card enter the Pi's
-IP (e.g. `192.168.1.50`) and port `5000`, click **Save & test**.
+Point the dashboard at the Pi's IP from **Settings → Raspberry Pi connection**. More detail
+on GPIO pins, systemd, and troubleshooting in [raspberry-pi/README.md](raspberry-pi/README.md).
 
-> ⚠️ Use `npm run dev` (HTTP) not the published HTTPS URL — browsers block HTTPS
-> pages from calling plain HTTP devices on your LAN.
+<details>
+<summary><strong>HTTP API</strong></summary>
+
+| Method | Path                        | Description                        |
+| ------ | --------------------------- | ------------------------------------ |
+| GET    | `/api/status`                | Health + uptime + device states     |
+| GET    | `/api/sensors`                | Latest reading + device states      |
+| GET    | `/api/history?hours=24`       | Raw readings for the window         |
+| GET    | `/api/consumption?days=7`     | Daily Wh + mL per device            |
+| GET    | `/api/events?limit=50`        | Recent device events with reason    |
+| GET/POST | `/api/settings`             | Read/update automation thresholds   |
+| POST   | `/api/irrigation\|fan\|grow_light\|door/<on\|off>` | Manual device control |
+
+</details>
+
+## Team
+
+**Abdulrahman Bin Zuair** (lead) · Badr Owais · Abdulrahman Albulaihi
+Advisor: Dr. Abdulwadood Abdulwaheed — KSU College of Computer and Information Sciences
 
 ---
 
-## HTTP API (served by the Pi)
-
-| Method | Path                                    | Description                                    |
-| ------ | --------------------------------------- | ---------------------------------------------- |
-| GET    | `/api/status`                           | Health + uptime + device states                |
-| GET    | `/api/sensors`                          | Latest reading + last irrigation timestamp     |
-| GET    | `/api/history?hours=24`                 | Raw readings for window                        |
-| GET    | `/api/consumption?days=7`               | Daily Wh + mL per device                       |
-| GET    | `/api/events?limit=50`                  | Recent device events with reason               |
-| POST   | `/api/irrigation/<on\|off>`             | Manual pump control (engages manual override)  |
-| POST   | `/api/fan/<on\|off>`                    | Manual fan control                             |
-| POST   | `/api/grow_light/<on\|off>`             | Manual grow-light control                      |
-
-### Automation rules (Pi)
-
-* **Fan** ON when temp > 30 °C, OFF when < 25 °C.
-* **Pump** ON when soil ADC < 330 (Dry), OFF when > 370 (Wet). Paused while fan is ON.
-* **Grow light** turns on at sunset if the day's peak DLI < 14 mol/m²/d; runs
-  for a duration calculated to make up the deficit (clamped 0.5–4 h).
-* Manual control from the dashboard sets a **manual override** for that device.
-  The override is released the next time automation and the device agree, or
-  (for grow-light) at the next sunrise.
-
-### Event log
-
-Every relay change is written to `device_events(ts, device, state, reason)`:
-
-* `manual` — toggled from the dashboard
-* `auto:soil_dry`, `auto:soil_wet`, `auto:temp_high`, `auto:temp_low`,
-  `auto:dli_low`, `auto:timer_done`, `auto:pump_priority`
-
-The dashboard's **Activity log** card translates these to human-readable text.
-
----
-
-## Project tree
-
-```
-raspberry-pi/
-  app.py              Flask API + SQLite + GPIO + automation
-  serial_monitor.py   Arduino USB reader
-  requirements.txt
-src/
-  pages/Dashboard.tsx Main dashboard
-  components/         Sensor cards, controls, consumption charts, activity log
-  lib/api.ts          HTTP client (talks to the Pi)
-```
-
----
-
-## Lovable project info
-
-URL: <https://lovable.dev/projects/97c25c50-7c76-4f40-9037-3acf3afdfbd3>
-
+<div align="center">
 Built with Vite + React + TypeScript + Tailwind + shadcn/ui.
+</div>

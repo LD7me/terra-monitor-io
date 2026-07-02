@@ -2,3 +2,4 @@ flask
 flask-cors
 pyserial
 RPi.GPIO; platform_system == "Linux"
+gpiozero; platform_system == "Linux"
