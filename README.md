@@ -106,7 +106,10 @@ on GPIO pins, systemd, and troubleshooting in [raspberry-pi/README.md](raspberry
 
 ## Team
 
-**Abdulrahman Bin Zuair** (lead) · Badr Owais · Abdulrahman Albulaihi
+- Abdulrahman Bin Zuair (team lead)
+- Badr Owais 
+- Abdulrahman Albulaihi
+
 Advisor: Dr. Abdulwadood Abdulwaheed — KSU College of Computer and Information Sciences
 
 ---
