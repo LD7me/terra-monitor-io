@@ -12,7 +12,7 @@
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry%20Pi-controller-A22846?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/)
 [![Arduino](https://img.shields.io/badge/Arduino-Uno-00979D?logo=arduino&logoColor=white)](https://www.arduino.cc/)
 
-<img src="docs/images/concept-overview.png" alt="System concept overview — solar power, sensing, actuators, AWG, and dashboard" width="800">
+<img src="docs/images/physical-setup.jpg" alt="The assembled greenhouse prototype: solar panel, battery, AWG unit, and planted enclosure" width="800">
 
 </div>
 
@@ -20,6 +20,10 @@ A greenhouse that waters, cools, and lights itself. Sensors watch the soil, air,
 a Raspberry Pi decides what to do about it; solar panels keep the lights on; and a
 desiccant unit pulls irrigation water straight out of the air. This repo holds the
 software — Arduino firmware, Pi controller, and the web dashboard — for the whole build.
+
+<div align="center">
+<img src="docs/images/concept-overview.png" alt="System concept overview — solar power, sensing, actuators, AWG, and dashboard" width="800">
+</div>
 
 ## The build
 
